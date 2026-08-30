@@ -9,7 +9,7 @@
 //	y                 side view / front view
 //	t                 narrate                      m             the intro
 //	s                 slide out of sight, or back  e             blink now
-//	a                 idle animation on/off
+//	a                 idle animation on/off          o             attention on/off
 //	tab               theme                        b             backdrop
 //	c                 cutout                       v             validator
 //	r                 reset                        q             quit
@@ -78,6 +78,7 @@ type model struct {
 	frame    int
 	next     int
 
+	watch  bool  // look at the middle of the window
 	hidden bool  // slid away
 	track  []int // narration, one mouth level per frame
 	pos    int
@@ -259,6 +260,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a":
 			m.animate = !m.animate
 			m.next = m.frame + 5
+		case "o":
+			m.watch = !m.watch
 		case "e":
 			m.blinking = !m.blinking
 		case "c":
@@ -314,6 +317,14 @@ func (m model) pose() auklet.Pose {
 	return p
 }
 
+// what the bird is attending to. in the workbench that is the middle of the
+// window, so walking the bird into a corner leaves it still watching the room.
+// in an application it would be the selected row, the pane that just changed,
+// the thing that went red.
+func (m model) attention() (int, int) {
+	return m.win.WorldX + m.win.W/2, m.win.WorldY + m.win.H/2
+}
+
 func (m model) state() string {
 	switch {
 	case m.roar >= 0:
@@ -327,14 +338,23 @@ func (m model) state() string {
 	}
 }
 
-func (m model) opts() scene.Opts {
+func (m model) baseOpts() scene.Opts {
 	return scene.Opts{
 		Theme: themes.All[m.theme], Backdrop: m.backdrop,
 		Glyphs: m.glyphs, Sprite: m.sprite(), Rows: m.rows,
 		SpriteX: m.sx, SpriteY: m.sy, Win: m.win,
 		Cutout: m.cutout, W: m.w, H: m.h - hudRows,
-		Pose: m.pose(),
 	}
+}
+
+func (m model) opts() scene.Opts {
+	o := m.baseOpts()
+	o.Pose = m.pose()
+	if m.watch {
+		tx, ty := m.attention()
+		o.Pose = append(o.Pose, scene.GazeAt(o, tx, ty)...)
+	}
+	return o
 }
 
 func (m model) View() string {
@@ -369,7 +389,7 @@ func (m model) View() string {
 		m.sprite().Name, m.sprite().ColsFor(m.rows), m.rows, m.glyphs, cut,
 		bold.Render(m.state()), faint.Render(where))
 
-	help := faint.Render("f focus  y view  t narrate  m intro  s slide  +/- size  g glyphs  tab theme  b backdrop  c cutout  r reset  q quit")
+	help := faint.Render("f focus  y view  t narrate  m intro  s slide  o attention  +/- size  g glyphs  tab theme  b backdrop  c cutout  r reset  q quit")
 	if m.showVal && err != nil {
 		help = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
 			Render(strings.ReplaceAll(err.Error(), "\n", "  |  "))
@@ -391,7 +411,7 @@ func clamp(v, lo, hi int) int {
 func main() {
 	p := tea.NewProgram(model{
 		glyphs: auklet.Quadrant, cutout: true, backdrop: 2, showVal: true,
-		animate: true, next: 20, roar: -1,
+		animate: true, next: 20, roar: -1, watch: true,
 	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

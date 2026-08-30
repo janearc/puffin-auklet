@@ -173,3 +173,71 @@ func TestFrontViewMouthsChangeTheBeak(t *testing.T) {
 		}
 	}
 }
+
+func TestGazeMovesThePupilAndSparesTheFace(t *testing.T) {
+	for _, s := range Views() {
+		eyes := s.eyes()
+		if len(eyes) == 0 {
+			t.Fatalf("%s: no eye found in the art", s.Name)
+		}
+		if s.Name == "front" && len(eyes) != 2 {
+			t.Errorf("front view found %d eyes, want 2", len(eyes))
+		}
+
+		rest := s.Pixels(nil)
+		for _, d := range [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}, {1, 1}} {
+			posed := s.Pixels(s.Gaze(d[0], d[1]))
+
+			var changed, offSocket int
+			for y := range rest {
+				for x := 0; x < len(rest[y]); x++ {
+					if rest[y][x] == posed[y][x] {
+						continue
+					}
+					changed++
+					// anything the gaze touches must already have been eye
+					if rest[y][x] != 'E' && rest[y][x] != 'X' {
+						offSocket++
+					}
+				}
+			}
+			if changed == 0 {
+				t.Errorf("%s: gaze %v changed nothing", s.Name, d)
+			}
+			if offSocket > 0 {
+				t.Errorf("%s: gaze %v painted %d pixels outside the socket",
+					s.Name, d, offSocket)
+			}
+		}
+
+		if p := s.Gaze(0, 0); len(p) != 0 {
+			t.Errorf("%s: looking straight ahead should be an empty pose", s.Name)
+		}
+		// out of range clamps rather than losing the pupil entirely
+		far := s.Pixels(s.Gaze(9, 9))
+		one := s.Pixels(s.Gaze(1, 1))
+		for y := range far {
+			if far[y] != one[y] {
+				t.Errorf("%s: gaze is not clamped to GazeRange", s.Name)
+				break
+			}
+		}
+	}
+}
+
+func TestMouthTrackForFitsTheDuration(t *testing.T) {
+	const fps = 24
+	for _, secs := range []float64{0.5, 2, 10} {
+		got := MouthTrackFor("hello. i am a puffin.", fps, secs)
+		want := int(secs*fps + 0.5)
+		if len(got) != want {
+			t.Errorf("%.1fs at %dfps: got %d frames, want %d", secs, fps, len(got), want)
+		}
+	}
+	// stretching must not invent levels the sprite cannot draw
+	for _, v := range MouthTrackFor("testing one two", fps, 7) {
+		if v < 0 || v >= FrontView.MouthLevels() {
+			t.Fatalf("level %d outside the sprite's %d shapes", v, FrontView.MouthLevels())
+		}
+	}
+}

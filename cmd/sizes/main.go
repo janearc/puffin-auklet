@@ -1,7 +1,7 @@
 // sizes dumps the sprite alone at a given glyph set and row count, one line
 // per cell, for offline inspection.
 //
-//	go run ./cmd/sizes <themeIdx> <glyphset> <rows> <view 0=side 1=front> <mouth> <blink 0|1>
+//	go run ./cmd/sizes <themeIdx> <glyphset> <rows> <view> <mouth> <blink> <gazeX> <gazeY>
 package main
 
 import (
@@ -45,6 +45,7 @@ func main() {
 	if argi(5, 0) == 1 {
 		pose = append(pose, sp.Blink...)
 	}
+	pose = append(pose, sp.Gaze(argi(6, 0), argi(7, 0))...)
 	grid := sp.CellsAt(t, gs, cols, rows, pose)
 	cw, ch := gs.Dims()
 	fmt.Printf("# %d %d %d %d\n", cols, rows, cw, ch)

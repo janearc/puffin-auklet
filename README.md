@@ -248,8 +248,27 @@ pipeline.
 It is deterministic -- the same text always gives the same track -- so a take can
 be reproduced exactly.
 
+`MouthTrackFor(text, fps, seconds)` fits the track to a known audio duration.
+Use it with real speech synthesis: `MouthTrack` guesses the length from the
+text, and against actual audio that guess is wrong.
+
 The side view has no mouth shapes. Opening a beak in profile means swinging the
 lower mandible away from the head, and the head behind it was never drawn.
+
+## Attention
+
+`Gaze(dx, dy)` shifts the pupils; `scene.GazeAt(o, x, y)` turns a world-space
+target into that pose. Point it at whatever the application is attending to --
+the selected row, the pane that just changed, the thing that went red -- and the
+bird looks at it.
+
+Only the sign of the offset matters. At this size there is nothing between
+looking left and looking further left.
+
+This works where beak movement does not, and the reason is the whole rule for
+what can be animated here: **a part can move exactly as far as there is art
+behind it.** The pupil's socket is already drawn, so shifting it uncovers ring.
+The beak has nothing behind it, so shifting it uncovers a hole.
 
 ## Rendering to video
 

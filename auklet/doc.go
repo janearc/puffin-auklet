@@ -53,10 +53,20 @@
 // meant to read the same in every skin, and a warning colour spent on a beak
 // stops being a warning.
 //
+// The table above is correct for DARK themes and will bite you on a light one.
+// Reported from the integration, on stardew: puffin darkens its Snow token on a
+// pale ground so the bird stays visible against the page, which is right -- and
+// that collapses Snow against Plumage, so Light and Dark end up 0.041 apart
+// against a floor of 0.300. Two correct adjustments colliding.
+//
+// So prefer themes.Dodo[name].Auklet() where the theme is one of dodo's four:
+// it branches on ground brightness and picks different fields for a light
+// ground. Fall back to the hand mapping only for themes that adapter has not
+// seen, and let Validate tell you whether it worked.
+//
 // puffin's Theme.Light already knows that a pale ground needs different
-// choices, and for the same reason this package cares: the bird's white face
-// vanishes on one. Trust that flag rather than re-deriving it. If you ever do
-// need to measure, Luminance is exported.
+// choices, for the same reason this package cares. Trust that flag rather than
+// re-deriving it. If you ever do need to measure, Luminance is exported.
 //
 // Call Theme.Validate once when the theme is selected. Not per frame. It
 // reports every collapsed contrast pair at once, with a sentence on what each
@@ -115,13 +125,30 @@
 // cheek.
 //
 // MouthTrack turns a line of text into one mouth level per frame, for
-// narration. It is deterministic, so a take reproduces exactly.
+// narration. It is deterministic, so a take reproduces exactly. Against real
+// synthesised audio use MouthTrackFor, which fits the track to a known duration
+// -- MouthTrack derives its length from the text, which is only a guess at how
+// long the line takes to say, and a mouth that stops two seconds before the
+// voice does is worse than one that never moved.
 //
-// What is NOT supported is moving a part. The base art is one flat grid with
-// nothing drawn behind anything else, so sliding the beak leaves a hole in the
-// head. Real articulation needs layers with z-order and roughly 150 pixels of
-// occluded head that nobody has drawn. Overlays cover blinking and talking,
-// which is what a mascot in a status bar actually does.
+// Gaze shifts the pupils, so the bird can look at whatever the application is
+// attending to. scene.GazeAt turns a world-space target into that pose.
+//
+// # What can and cannot move
+//
+// A part can move exactly as far as there is art behind it.
+//
+// The pupil can move: the socket it sits in is already drawn, so shifting it
+// uncovers ring rather than a hole. That is Gaze, and it is why looking around
+// cost forty lines.
+//
+// The beak cannot. The base art is one flat grid with nothing drawn behind
+// anything else, so sliding it leaves a hole in the head. That needs layers
+// with z-order and roughly 150 pixels of occluded head nobody has drawn, and it
+// is an art job before it is a code one.
+//
+// Between those two, overlays cover what a mascot in a status bar actually
+// does: blink, talk, and look at things.
 //
 // # Relationship to splash.go
 //

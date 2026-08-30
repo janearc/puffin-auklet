@@ -77,3 +77,31 @@ func vowelLevel(r rune) int {
 		return 2
 	}
 }
+
+// MouthTrackFor is MouthTrack fitted to a known duration.
+//
+// This is the one you want with real speech synthesis. MouthTrack derives its
+// length from the TEXT -- how many syllables, how much punctuation -- which is
+// a guess at how long the line takes to say. Against actual audio that guess is
+// wrong, and a mouth that stops moving two seconds before the voice does is
+// worse than one that never moved.
+//
+// So: ask the synthesiser how long the clip is, pass that here, and the track
+// is stretched or compressed to match. The rhythm's PROPORTIONS survive -- the
+// pause at the full stop is still the longest thing in the line -- but absolute
+// syllable timing does not, and it does not need to. Nobody is reading the beak.
+func MouthTrackFor(text string, fps int, seconds float64) []int {
+	base := MouthTrack(text, fps)
+	if fps < 1 {
+		fps = 10
+	}
+	want := int(seconds*float64(fps) + 0.5)
+	if want < 1 || len(base) == 0 {
+		return base
+	}
+	out := make([]int, want)
+	for i := range out {
+		out[i] = base[i*len(base)/want]
+	}
+	return out
+}

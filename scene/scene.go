@@ -208,3 +208,17 @@ func Demo(args []string) (Opts, string, string) {
 	o.SpriteY = win.WorldY + (win.H-rows)/2 + argi(5, 0)
 	return o, cur.Name, cur.Note
 }
+
+// GazeAt returns the pose for the bird looking at a point in WORLD space --
+// wherever the application's attention currently is. Compose it with whatever
+// else the bird is doing:
+//
+//	pose := append(scene.GazeAt(o, sel.X, sel.Y), sprite.Mouth(level)...)
+//
+// It is a direction, not an angle. Only the sign of the offset survives, since
+// at this size there is nothing between looking left and looking further left.
+func GazeAt(o Opts, targetX, targetY int) auklet.Pose {
+	x, y, w, h := SpriteRect(o)
+	dx, dy := auklet.GazeToward(targetX-(x+w/2), targetY-(y+h/2))
+	return o.sprite().Gaze(dx, dy)
+}
