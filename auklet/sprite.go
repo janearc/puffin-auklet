@@ -18,6 +18,7 @@ type Sprite struct {
 	// beak shut and is empty by construction: the base art is already closed.
 	Mouths []Pose
 
+	eyeCache   []eye
 	poses      map[string]Pose
 	emotes     map[string]Emote
 	emoteOrder []string
@@ -63,8 +64,10 @@ func Views() []Sprite { return []Sprite{SideView, FrontView} }
 // the stock emote vocabulary is assembled from poses each sprite already has,
 // which is why it costs no art. see buildEmotes.
 func init() {
-	buildEmotes(&SideView)
-	buildEmotes(&FrontView)
+	for _, s := range []*Sprite{&SideView, &FrontView} {
+		s.eyeCache = findEyes(s.art)
+		buildEmotes(s)
+	}
 }
 
 // SideView is the bird in profile: the classic silhouette, and the one that

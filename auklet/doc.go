@@ -186,6 +186,17 @@
 // Emote.Parts says up front whether a series would collide, so a caller can
 // refuse a cue rather than stutter the track.
 //
+// A Frame may also carry a Transform: a translation in cells and a size
+// multiplier, identity by default. That is how a settle, a walk-on bob and the
+// anime squash-and-stretch pop are one mechanism rather than three hand-rolled
+// ones -- none of them is art, since the sprite already resamples to any size.
+//
+// The sprite does not apply a transform; the CALLER does, because the caller
+// owns position and size. Scale is relative for the same reason: an emote that
+// demands 13 rows fights a corner that has 8, while 1.2x composes with it. Use
+// ScaleRows, and reserve the block at Emote.Bounds() before playing, or a
+// sprite that grows mid-series tears whatever it is spliced into.
+//
 // # Relationship to splash.go
 //
 // puffin's existing splash already separates beak from plumage so the beak can

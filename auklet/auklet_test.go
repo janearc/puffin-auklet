@@ -1,8 +1,10 @@
 package auklet
 
 import (
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/janearc/puffin-auklet/canvas"
 )
@@ -353,6 +355,147 @@ func TestSpriteFileRoundTrip(t *testing.T) {
 			if x[r][c] != y[r][c] {
 				t.Fatalf("round-tripped sprite renders differently at %d,%d", c, r)
 			}
+		}
+	}
+}
+
+// A sprite nobody here drew must get the whole vocabulary, not just the parts
+// that were wired up for the two built-ins. Reported from the puffin
+// integration: NewSprite did not assemble emotes, so every cue puffin drives
+// the bird with was unavailable to exactly the people the file format exists
+// for.
+func TestStrangerSpriteGetsTheVocabulary(t *testing.T) {
+	f, err := os.Open("testdata/stranger.sprite")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	s, err := ParseSprite(f)
+	if err != nil {
+		t.Fatalf("parsing a hand-written sprite: %v", err)
+	}
+	if s.Name != "stranger" {
+		t.Errorf("name %q", s.Name)
+	}
+
+	if len(s.Emotes()) == 0 {
+		t.Fatal("a loaded sprite has no emotes at all")
+	}
+	for _, want := range []string{"blink", "startled", "curious"} {
+		if _, ok := s.Emote(want); !ok {
+			t.Errorf("loaded sprite is missing the %q emote", want)
+		}
+	}
+
+	// gaze needs eyes found in ITS art, not in the package's
+	if got := len(s.eyes()); got == 0 {
+		t.Error("no eyes found in the stranger's art")
+	}
+	if len(s.Gaze(1, 0)) == 0 {
+		t.Error("stranger cannot look sideways")
+	}
+
+	// and it renders, themed, at a size nobody chose for it
+	th := DefaultTheme()
+	if err := th.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	grid := s.CellsAt(th, Quadrant, s.ColsFor(10), 10, s.Gaze(1, 0))
+	if len(grid) != 10 {
+		t.Errorf("rendered %d rows, want 10", len(grid))
+	}
+}
+
+// A sprite with no eyes must not advertise emotes it cannot perform: a cue that
+// validates and then does nothing is worse than one that errors.
+func TestEyelessSpriteDoesNotAdvertiseEyeEmotes(t *testing.T) {
+	s, err := NewSprite("blob", []string{"KKKK", "KWWK", "KWWK", "KKKK"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range s.Emotes() {
+		e, _ := s.Emote(n)
+		empty := true
+		for _, f := range e.Frames {
+			// a transform-only emote has no pose and is still a performance:
+			// an eyeless blob genuinely can pop and bob
+			if len(f.Pose) > 0 || !f.Transform.IsIdentity() {
+				empty = false
+			}
+		}
+		if empty {
+			t.Errorf("emote %q is advertised but does nothing at all", n)
+		}
+	}
+	// it must not claim the ones it has no eyes for
+	for _, n := range []string{"startled", "curious", "shifty"} {
+		if _, ok := s.Emote(n); ok {
+			t.Errorf("an eyeless sprite advertises %q", n)
+		}
+	}
+}
+
+func TestTransformEmotes(t *testing.T) {
+	s := FrontView
+
+	// the identity is the zero value, so every existing emote is unaffected
+	for _, n := range []string{"blink", "startled", "curious"} {
+		e, ok := s.Emote(n)
+		if !ok {
+			t.Fatalf("missing %q", n)
+		}
+		for i, f := range e.Frames {
+			if !f.Transform.IsIdentity() {
+				t.Errorf("%s frame %d gained a transform it never asked for", n, i)
+			}
+		}
+	}
+
+	pop, ok := s.Emote("pop")
+	if !ok {
+		t.Fatal("no pop emote")
+	}
+	maxScale, dx, dy := pop.Bounds()
+	if maxScale <= 1 {
+		t.Errorf("pop peaks at %.2f; it is meant to grow", maxScale)
+	}
+	if dx != 0 || dy != 0 {
+		t.Errorf("pop translates (%d,%d); it should only scale", dx, dy)
+	}
+
+	// a caller reserving a block needs the peak BEFORE playing
+	if got := ScaleRows(11, maxScale); got <= 11 {
+		t.Errorf("ScaleRows(11, %.2f) = %d, want more than 11", maxScale, got)
+	}
+	if got := ScaleRows(1, 0.01); got != 1 {
+		t.Errorf("ScaleRows floor is %d, want 1", got)
+	}
+
+	// a transform-only emote still counts as a performance
+	bob, ok := s.Emote("bob")
+	if !ok {
+		t.Fatal("no bob emote")
+	}
+	if !bob.Loop {
+		t.Error("bob should loop")
+	}
+	if _, running := bob.At(bob.Length() * 3); !running {
+		t.Error("a looping emote stopped running")
+	}
+	if _, _, dy := bob.Bounds(); dy == 0 {
+		t.Error("bob does not move vertically")
+	}
+
+	// At and Pose agree
+	for _, d := range []time.Duration{0, 50 * time.Millisecond, 200 * time.Millisecond} {
+		f, ok1 := pop.At(d)
+		p, ok2 := pop.Pose(d)
+		if ok1 != ok2 {
+			t.Errorf("At and Pose disagree on running at %v", d)
+		}
+		if len(f.Pose) != len(p) {
+			t.Errorf("At and Pose disagree on the pose at %v", d)
 		}
 	}
 }
