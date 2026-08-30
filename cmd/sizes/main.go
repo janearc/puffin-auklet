@@ -11,7 +11,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/janearc/puffin-auklet/puffin"
+	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/themes"
 )
 
@@ -36,12 +36,12 @@ func hex(c lipgloss.TerminalColor) string {
 
 func main() {
 	ti, gsi, rows := argi(0, 0), argi(1, 1), argi(2, 22)
-	gs := puffin.GlyphSet(gsi)
+	gs := auklet.GlyphSet(gsi)
 	t := themes.All[ti%len(themes.All)].Theme
-	sp := puffin.Views()[argi(3, 0)%len(puffin.Views())]
+	sp := auklet.Views()[argi(3, 0)%len(auklet.Views())]
 	cols := sp.ColsFor(rows)
 
-	pose := append(puffin.Pose{}, sp.Mouth(argi(4, 0))...)
+	pose := append(auklet.Pose{}, sp.Mouth(argi(4, 0))...)
 	if argi(5, 0) == 1 {
 		pose = append(pose, sp.Blink...)
 	}

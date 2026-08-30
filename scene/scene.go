@@ -19,8 +19,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/canvas"
-	"github.com/janearc/puffin-auklet/puffin"
 	"github.com/janearc/puffin-auklet/themes"
 )
 
@@ -39,14 +39,14 @@ type Window struct {
 type Opts struct {
 	Theme    themes.Named
 	Backdrop int
-	Glyphs   puffin.GlyphSet
-	Sprite   puffin.Sprite // zero value means the side view
+	Glyphs   auklet.GlyphSet
+	Sprite   auklet.Sprite // zero value means the side view
 	Rows     int           // sprite height in cells; width follows from the aspect
 
 	SpriteX, SpriteY int // WORLD coordinates
 	Win              Window
 	Cutout           bool
-	Pose             puffin.Pose
+	Pose             auklet.Pose
 
 	W, H int // screen size
 }
@@ -85,7 +85,7 @@ func Build(o Opts) *canvas.Canvas {
 
 // desktop is what surrounds the window: the theme's ground, stippled, so the
 // window reads as a window rather than as the whole screen.
-func desktop(c *canvas.Canvas, t puffin.Theme) {
+func desktop(c *canvas.Canvas, t auklet.Theme) {
 	c.Fill(canvas.Cell{R: ' ', BG: t.Background})
 	w, h := c.Size()
 	for y := 0; y < h; y++ {
@@ -95,7 +95,7 @@ func desktop(c *canvas.Canvas, t puffin.Theme) {
 	}
 }
 
-func backdrop(c *canvas.Canvas, which int, t puffin.Theme, field lipgloss.TerminalColor) {
+func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.TerminalColor) {
 	w, h := c.Size()
 	c.Fill(canvas.Cell{R: ' ', BG: field})
 
@@ -120,9 +120,9 @@ func backdrop(c *canvas.Canvas, which int, t puffin.Theme, field lipgloss.Termin
 	}
 }
 
-func (o Opts) sprite() puffin.Sprite {
+func (o Opts) sprite() auklet.Sprite {
 	if o.Sprite.Name == "" {
-		return puffin.SideView
+		return auklet.SideView
 	}
 	return o.Sprite
 }
@@ -201,10 +201,10 @@ func Demo(args []string) (Opts, string, string) {
 	win := Window{W: 46, H: 22, ScreenX: 3, ScreenY: 2}
 	rows := argi(2, 14)
 	o := Opts{
-		Theme: cur, Backdrop: argi(1, 0), Glyphs: puffin.Quadrant, Rows: rows,
+		Theme: cur, Backdrop: argi(1, 0), Glyphs: auklet.Quadrant, Rows: rows,
 		Win: win, Cutout: argi(3, 0) == 1, W: w, H: h,
 	}
-	o.SpriteX = win.WorldX + (win.W-puffin.ColsFor(rows))/2 + argi(4, 0)
+	o.SpriteX = win.WorldX + (win.W-auklet.ColsFor(rows))/2 + argi(4, 0)
 	o.SpriteY = win.WorldY + (win.H-rows)/2 + argi(5, 0)
 	return o, cur.Name, cur.Note
 }

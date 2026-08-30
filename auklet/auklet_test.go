@@ -1,4 +1,4 @@
-package puffin
+package auklet
 
 import (
 	"testing"

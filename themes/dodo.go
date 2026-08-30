@@ -2,7 +2,7 @@ package themes
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/janearc/puffin-auklet/puffin"
+	"github.com/janearc/puffin-auklet/auklet"
 )
 
 // Vars is the subset of a dodo theme the puffin adapter reads. mirrored from
@@ -21,10 +21,10 @@ type Vars struct {
 //
 // semantic colours (--ok, --warn, --caution) are deliberately not used. a
 // warning colour spent on decoration stops reading as a warning.
-func (v Vars) Puffin() puffin.Theme {
+func (v Vars) Auklet() auklet.Theme {
 	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
 
-	lum, _ := puffin.Luminance(c(v.Bg))
+	lum, _ := auklet.Luminance(c(v.Bg))
 	lightGround := lum > 0.18
 
 	dark, light, wing := v.Raised, v.Ink, v.Line
@@ -32,7 +32,7 @@ func (v Vars) Puffin() puffin.Theme {
 		dark, light, wing = v.Ink, v.Panel, v.Dim
 	}
 
-	return puffin.Theme{
+	return auklet.Theme{
 		Background: c(v.Bg),
 		Dark:       c(dark),
 		Light:      c(light),

@@ -1,4 +1,4 @@
-package puffin
+package auklet
 
 // the head-on bird. generated as shapes, then trimmed of its blank margin --
 // see the note in sprite.go for why this view exists and what it costs.

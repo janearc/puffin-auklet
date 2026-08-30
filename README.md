@@ -61,6 +61,37 @@ those coordinates and the whole bird is still there.
 The window is kept on screen. The bird is not. That asymmetry is deliberate: a
 window you can lose is a bug, a sprite you can lose is a feature.
 
+## Integrating into puffin
+
+The Go package is `auklet`, not `puffin`. That is deliberate: the target repo is
+itself called puffin and already has a `Theme`, and two of those in one file is
+a bad afternoon.
+
+    import "github.com/janearc/puffin-auklet/auklet"
+
+puffin keeps its own theme type rather than reading dodo's stylesheet, so the
+adapter belongs on puffin's side -- nothing can import a `package main`. It is
+close to a rename, because puffin's theme already carries the bird's own colours:
+
+| auklet role | puffin theme field |
+|---|---|
+| `Background` | `Bg`, or nil for a cutout |
+| `Dark` | `Plumage` |
+| `Light` | `Snow` |
+| `Wing` | `Line` |
+| `BeakBase` | `Dim` |
+| `BeakBand` | `AccentToken` |
+| `BeakTip`, `Feet`, `EyeRing` | `Accent` |
+| `Pupil` | `Plumage` |
+| `Stripe` | `Dim` |
+
+puffin's `Light bool` does the job that the dodo adapter does with a luminance
+test: it already knows a pale ground needs different choices, and for the same
+reason -- the bird's white face vanishes on one. Trust the flag; do not
+re-derive it.
+
+Call `Validate()` once when the theme is selected, not per frame.
+
 ## Using the sprite
 
     t := themes.Dodo["vaporwave"].Puffin()

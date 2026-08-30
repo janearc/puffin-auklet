@@ -3,8 +3,8 @@ package scene
 import (
 	"testing"
 
+	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/canvas"
-	"github.com/janearc/puffin-auklet/puffin"
 	"github.com/janearc/puffin-auklet/themes"
 )
 
@@ -12,9 +12,9 @@ func base() Opts {
 	win := Window{W: 40, H: 20, ScreenX: 3, ScreenY: 2}
 	rows := 12
 	return Opts{
-		Theme: themes.All[0], Glyphs: puffin.Quadrant, Rows: rows,
+		Theme: themes.All[0], Glyphs: auklet.Quadrant, Rows: rows,
 		Win: win, Cutout: true, W: 60, H: 26,
-		SpriteX: win.WorldX + (win.W-puffin.ColsFor(rows))/2,
+		SpriteX: win.WorldX + (win.W-auklet.ColsFor(rows))/2,
 		SpriteY: win.WorldY + (win.H-rows)/2,
 	}
 }
@@ -46,7 +46,7 @@ func cellAt(c *canvas.Canvas, x, y int) canvas.Cell {
 
 func TestVisibility(t *testing.T) {
 	b := base()
-	cols := puffin.ColsFor(b.Rows)
+	cols := auklet.ColsFor(b.Rows)
 
 	cases := []struct {
 		name string
@@ -112,7 +112,7 @@ func TestSpriteSurvivesLeavingTheView(t *testing.T) {
 	}
 
 	// walk the window to the bird rather than moving the bird back
-	o.Win.WorldX = o.SpriteX - (o.Win.W-puffin.ColsFor(o.Rows))/2
+	o.Win.WorldX = o.SpriteX - (o.Win.W-auklet.ColsFor(o.Rows))/2
 	o.Win.WorldY = o.SpriteY - (o.Win.H-o.Rows)/2
 	if !Visible(o) {
 		t.Fatal("window moved onto the sprite but it is still not visible")

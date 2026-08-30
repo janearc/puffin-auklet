@@ -1,4 +1,4 @@
-// package puffin renders an atlantic puffin as terminal half-blocks.
+// package auklet renders an atlantic puffin as terminal cells.
 //
 // the art is a fixed 39x44 pixel grid. two pixel rows share one terminal cell
 // via the upper-half-block glyph, so a cell is roughly square and the bird is
@@ -6,7 +6,7 @@
 //
 // colours are supplied by the caller as a Theme of named roles. the art itself
 // never names a colour, so retheming is a struct, not a redraw.
-package puffin
+package auklet
 
 import (
 	"errors"
@@ -279,7 +279,7 @@ type pair struct {
 
 // Validate reports every role pair that has collapsed, all at once. a theme
 // that fails this still renders; it just renders something that is not
-// identifiably a puffin.
+// identifiably a auklet.
 func (t Theme) Validate() error {
 	var errs []error
 

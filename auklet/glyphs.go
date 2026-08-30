@@ -1,4 +1,4 @@
-package puffin
+package auklet
 
 // a terminal cell can hold more than one pixel. how many depends on which
 // block glyphs you are willing to emit:

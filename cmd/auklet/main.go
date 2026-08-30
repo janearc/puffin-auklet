@@ -25,7 +25,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/janearc/puffin-auklet/puffin"
+	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/scene"
 	"github.com/janearc/puffin-auklet/themes"
 )
@@ -60,7 +60,7 @@ func (f focus) String() string {
 type model struct {
 	theme    int
 	backdrop int
-	glyphs   puffin.GlyphSet
+	glyphs   auklet.GlyphSet
 	view     int
 	rows     int
 	sx, sy   int // sprite, in WORLD coordinates -- never clamped
@@ -92,7 +92,7 @@ func tick() tea.Cmd {
 
 func (m model) Init() tea.Cmd { return tick() }
 
-func (m *model) sprite() puffin.Sprite { return puffin.Views()[m.view] }
+func (m *model) sprite() auklet.Sprite { return auklet.Views()[m.view] }
 
 func (m *model) reset() {
 	screenH := m.h - hudRows
@@ -152,7 +152,7 @@ var introScript = []struct {
 func (m *model) talkOnly() {
 	// only the front view has a beak that opens; presenting in profile would
 	// mean swinging a mandible away from a head that was never drawn.
-	for i, s := range puffin.Views() {
+	for i, s := range auklet.Views() {
 		if s.Name == "front" {
 			m.view = i
 		}
@@ -224,12 +224,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "f":
 			m.focus = (m.focus + 1) % 3
 		case "y":
-			m.view = (m.view + 1) % len(puffin.Views())
+			m.view = (m.view + 1) % len(auklet.Views())
 			m.rows = min(m.rows, m.sprite().RowsToFit(m.win.W, m.win.H))
 		case "t":
 			m.talkOnly()
 			m.hidden = false
-			m.track, m.pos = puffin.MouthTrack(sample, fps), 0
+			m.track, m.pos = auklet.MouthTrack(sample, fps), 0
 		case "m":
 			m.talkOnly()
 			m.hidden = false
@@ -292,9 +292,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // pose is the whole performance, resolved for this frame. the intro outranks
 // narration, narration outranks idle blinking, and a shut beak is the default.
-func (m model) pose() puffin.Pose {
+func (m model) pose() auklet.Pose {
 	sp := m.sprite()
-	var p puffin.Pose
+	var p auklet.Pose
 
 	switch {
 	case m.roar >= 0:
@@ -390,7 +390,7 @@ func clamp(v, lo, hi int) int {
 
 func main() {
 	p := tea.NewProgram(model{
-		glyphs: puffin.Quadrant, cutout: true, backdrop: 2, showVal: true,
+		glyphs: auklet.Quadrant, cutout: true, backdrop: 2, showVal: true,
 		animate: true, next: 20, roar: -1,
 	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
