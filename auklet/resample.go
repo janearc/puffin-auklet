@@ -1,8 +1,6 @@
 package auklet
 
 import (
-	"math"
-
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/janearc/puffin-auklet/canvas"
@@ -40,10 +38,6 @@ func SourceSize() (w, h int) { return SideView.Size() }
 // square on screen is not square in cells. this is the only place that ratio is
 // applied; everything else works in whatever grid it is handed.
 func ColsFor(rows int) int { return SideView.ColsFor(rows) }
-
-func colsFor(sw, sh, rows int) int {
-	return int(math.Round(float64(rows) * 2 * float64(sw) / float64(sh)))
-}
 
 // RowsToFit returns the largest row count whose sprite fits inside maxCols by
 // maxRows, at least 3.

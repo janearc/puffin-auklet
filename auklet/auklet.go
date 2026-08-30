@@ -1,11 +1,10 @@
-// package auklet renders an atlantic puffin as terminal cells.
+// The side view's stencil, the Theme its roles are painted with, and the
+// validator that keeps a theme legible. See doc.go for the package overview.
 //
-// the art is a fixed 39x44 pixel grid. two pixel rows share one terminal cell
-// via the upper-half-block glyph, so a cell is roughly square and the bird is
-// 39 columns by 22 rows on screen.
-//
-// colours are supplied by the caller as a Theme of named roles. the art itself
-// never names a colour, so retheming is a struct, not a redraw.
+// The art is a fixed 39x44 pixel grid of role codes. Colours are supplied by
+// the caller; the art itself never names one, so retheming is a struct rather
+// than a redraw.
+
 package auklet
 
 import (
