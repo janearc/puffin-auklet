@@ -16,7 +16,7 @@ that happened.
 
 ## Run it
 
-    go run ./cmd/auklet
+    go run ./cmd/bandersnatch
 
 | key | does |
 |---|---|
@@ -332,7 +332,7 @@ of a rectangular halo, and it is the part to be careful with when editing
 | `canvas/` | cell buffer and compositing |
 | `themes/` | dodo's four plus three diagnostic themes |
 | `scene/` | backdrop and placement, shared by the viewer and the renderers |
-| `cmd/auklet` | the viewer |
+| `cmd/bandersnatch` | the workbench |
 | `cmd/gen-themes` | stylesheet to Go |
 | `cmd/shot` | renders one composed screen to stdout, no TTY needed |
 | `cmd/dump` | one line per cell, for checking a render without parsing escapes |

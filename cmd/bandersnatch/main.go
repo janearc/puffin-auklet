@@ -1,4 +1,4 @@
-// auklet is a workbench for the puffin sprite: dodo's themes, arbitrary size,
+// bandersnatch is the workbench for the auklet sprite: dodo's themes, arbitrary size,
 // cutout transparency, a window to move it around in and out of, and the poses
 // it needs to present to camera.
 //
