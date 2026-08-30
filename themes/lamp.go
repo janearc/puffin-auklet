@@ -17,7 +17,7 @@ func init() {
 			BeakBase:   c("#3E434B"), // shade rim, darker than the body
 			BeakBand:   c("#9C8B6E"), // shade mid-band, warm brass-gray
 			BeakTip:    c("#FFB627"), // the bulb, glowing
-			Feet:       c("#6B7280"), // unused -- see cmd/gen-art/lamp.go
+			Feet:       c("#E8543C"), // the ball -- a toy, not more graphite
 			Pupil:      c("#14171B"),
 			EyeRing:    c("#8B93A0"),
 			Stripe:     c("#23262B"), // the joints' rivet dots

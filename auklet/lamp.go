@@ -32,6 +32,32 @@ var lampFlicker = Pose{{
 	},
 }}
 
+// lampShadeAway: the shade's three bands, recentred toward the back corner
+// of the poly instead of toward the viewer -- the bulb not facing you reads
+// as "not looking at you yet," the same way a puffin not making eye contact
+// is a gaze pose and not a different bird. Computed from the shade polygon
+// in cmd/gen-art/lamp.go rather than eyeballed, the same way the astronaut
+// helmets were.
+var lampShadeAway = Pose{{
+	Name: "shade-away", Part: PartOther, OX: 0, OY: 0,
+	Art: []string{
+		"............YB.......",
+		"..........RRYYB......",
+		".........RRRRYBB.....",
+		".......RRRRRRYBBB....",
+		"......YRRRRRRYBBBB...",
+		"......YRRRRRRYBBBBB..",
+		".......YRRRRYBBBBBBB.",
+		".......YYYYYBBBBBBBB.",
+		".......BBBBBBBBBBBB..",
+		"........BBBBBBBBBBB..",
+		"........BBBBBBBBBBB..",
+		"........BBBBBBBB.....",
+		".........BB..........",
+		".....................",
+	},
+}}
+
 // lampEmotes: hop is the character's whole signature, squat-spring-land in
 // five frames of pure Transform. The four looks are one frame each, held
 // briefly and not looping -- a glance, not a performance -- because at this
@@ -61,6 +87,21 @@ func lampEmotes() []Emote {
 		look("look-right", 2, 0),
 		look("look-down", 0, 1),
 		look("look-up", 0, -2),
+		{
+			// turn-in: leaning aside with the shade turned away, then the
+			// turn itself -- shade-away drops off and the shade is facing
+			// the fourth wall in the same beat the lean straightens out.
+			// "Fourth wall" language stolen deliberately from the puffin's
+			// own turn commit; the mechanism is smaller because there is
+			// one view here, not four, but the beat is the same idea.
+			Name: "turn-in", Loop: false,
+			Frames: []Frame{
+				{Pose: lampShadeAway, Transform: step(-3, 1, 0.95), Hold: ms(160)},
+				{Pose: lampShadeAway, Transform: step(-2, 0, 0.98), Hold: ms(130)},
+				{Transform: step(-1, -1, 1.05), Hold: ms(120)}, // the turn
+				{Transform: step(0, 0, 1), Hold: ms(160)},
+			},
+		},
 	}
 }
 
@@ -75,10 +116,11 @@ func mustLampSprite(name string, art []string) Sprite {
 	return s
 }
 
-// LampFrontView is the only view so far -- the arm's zigzag and the shade's
-// tilt are both drawn facing the camera already, and a profile of a lamp is
-// a much smaller design question than a profile of a face. Extend later if
-// it turns out to want one.
+// LampFrontView and LampFrontBallView: two Sprites, not one Sprite plus a
+// pose, because the ball needs canvas room a pose cannot grow -- see
+// cmd/gen-art/lamp.go. "Sometimes" the ball means picking the view, the
+// same way y cycles turn angles for the other characters.
 var LampFrontView = mustLampSprite("front", lampFrontArt)
+var LampFrontBallView = mustLampSprite("front-ball", lampFrontBallArt)
 
-func LampViews() []Sprite { return []Sprite{LampFrontView} }
+func LampViews() []Sprite { return []Sprite{LampFrontView, LampFrontBallView} }
