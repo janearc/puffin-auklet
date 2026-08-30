@@ -17,7 +17,11 @@ package auklet
 // is chosen. that matters: a posed bird goes through exactly the same sampling
 // and theming as a still one, so a pose cannot quietly break either.
 type Overlay struct {
-	Name   string
+	Name string
+	// Part is which region of the bird this overlay drives. It lets two things
+	// animating at once be checked for collision rather than silently fighting
+	// -- see Pose.Only.
+	Part   Part
 	OX, OY int      // top-left of the patch, in source pixels
 	Art    []string // role codes; '.' means transparent, keep what is beneath
 }
@@ -27,7 +31,7 @@ type Pose []Overlay
 
 // sideBlink closes the side view's eye: lid down, ring goes with it.
 var sideBlink = Pose{{
-	Name: "blink", OX: 17, OY: 8,
+	Name: "blink", Part: PartEyes, OX: 17, OY: 8,
 	// the lid stops short of the nape stripe on purpose. run them together and
 	// the two read as one long slot rather than as a closed eye.
 	Art: []string{
@@ -74,13 +78,13 @@ func (p Pose) applyTo(base []string) []string {
 // frontBlink closes both eyes. two patches, not one: the eyes are far apart and
 // a single overlay spanning them would repaint the beak between.
 var frontBlink = Pose{
-	{Name: "blink-l", OX: 3, OY: 9, Art: []string{
+	{Name: "blink-l", Part: PartEyes, OX: 3, OY: 9, Art: []string{
 		"WWWWW",
 		"WWWWW",
 		"DDDDD",
 		"WWWWW",
 	}},
-	{Name: "blink-r", OX: 16, OY: 9, Art: []string{
+	{Name: "blink-r", Part: PartEyes, OX: 16, OY: 9, Art: []string{
 		"WWWWW",
 		"WWWWW",
 		"DDDDD",

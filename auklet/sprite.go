@@ -17,6 +17,10 @@ type Sprite struct {
 	// Mouths are the mouth shapes, closed first, widening. Mouths[0] is the
 	// beak shut and is empty by construction: the base art is already closed.
 	Mouths []Pose
+
+	poses      map[string]Pose
+	emotes     map[string]Emote
+	emoteOrder []string
 }
 
 // Size reports the stencil's dimensions in source pixels.
@@ -51,8 +55,17 @@ func (s Sprite) MouthLevels() int {
 	return len(s.Mouths)
 }
 
-// Views is every sprite, in the order a viewer should cycle them.
+// Views is every sprite as an ORDERED sequence, so a caller can step along it
+// rather than naming vars. Today that is profile then front; when turn frames
+// exist they belong in this list, in turn order, and stepping it becomes a pan.
 func Views() []Sprite { return []Sprite{SideView, FrontView} }
+
+// the stock emote vocabulary is assembled from poses each sprite already has,
+// which is why it costs no art. see buildEmotes.
+func init() {
+	buildEmotes(&SideView)
+	buildEmotes(&FrontView)
+}
 
 // SideView is the bird in profile: the classic silhouette, and the one that
 // reads at the smallest sizes because the beak is doing all the work.
@@ -72,14 +85,14 @@ var FrontView = Sprite{
 	Name: "front", art: frontArt, Blink: frontBlink,
 	Mouths: []Pose{
 		nil, // shut
-		{{Name: "ajar", OX: 10, OY: 17, Art: []string{"KKKK"}}},
-		{{Name: "open", OX: 10, OY: 17, Art: []string{"KKKK", "KKKK"}}},
+		{{Name: "ajar", Part: PartMouth, OX: 10, OY: 17, Art: []string{"KKKK"}}},
+		{{Name: "open", Part: PartMouth, OX: 10, OY: 17, Art: []string{"KKKK", "KKKK"}}},
 		{
-			{Name: "wide", OX: 10, OY: 16, Art: []string{
+			{Name: "wide", Part: PartMouth, OX: 10, OY: 16, Art: []string{
 				"KKKK", "KKKK", "KKKK", "KKKK",
 			}},
 			// the lower mandible swings down, so the beak gets longer
-			{Name: "wide-jaw", OX: 11, OY: 24, Art: []string{"RR", "RR"}},
+			{Name: "wide-jaw", Part: PartMouth, OX: 11, OY: 24, Art: []string{"RR", "RR"}},
 		},
 	},
 }

@@ -1,6 +1,7 @@
 package auklet
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/janearc/puffin-auklet/canvas"
@@ -238,6 +239,120 @@ func TestMouthTrackForFitsTheDuration(t *testing.T) {
 	for _, v := range MouthTrackFor("testing one two", fps, 7) {
 		if v < 0 || v >= FrontView.MouthLevels() {
 			t.Fatalf("level %d outside the sprite's %d shapes", v, FrontView.MouthLevels())
+		}
+	}
+}
+
+func TestEmotesSettleAndEnumerate(t *testing.T) {
+	for _, s := range Views() {
+		names := s.Emotes()
+		if len(names) == 0 {
+			t.Fatalf("%s: no emotes", s.Name)
+		}
+		for _, n := range names {
+			e, ok := s.Emote(n)
+			if !ok {
+				t.Fatalf("%s: Emotes() listed %q but Emote() does not have it", s.Name, n)
+			}
+			if e.Length() <= 0 {
+				t.Errorf("%s/%s: zero length", s.Name, n)
+			}
+			// a non-looping emote MUST end, or a bird gets stuck in the last
+			// frame of startled when the next cue arrives early
+			if _, running := e.Pose(e.Length()); running != e.Loop {
+				t.Errorf("%s/%s: running=%v past its end, loop=%v", s.Name, n, running, e.Loop)
+			}
+			if _, running := e.Pose(0); !running {
+				t.Errorf("%s/%s: not running at t=0", s.Name, n)
+			}
+		}
+		if _, ok := s.Emote("no-such-emote"); ok {
+			t.Errorf("%s: unknown emote reported as present", s.Name)
+		}
+	}
+}
+
+func TestEmotePartsAreHonest(t *testing.T) {
+	// only emotes that declare the mouth may touch it: a script driving speech
+	// needs to refuse those rather than stutter the mouth track.
+	for _, s := range Views() {
+		for _, n := range s.Emotes() {
+			e, _ := s.Emote(n)
+			safe := true
+			for _, f := range e.Frames {
+				if f.Pose.Only(^PartMouth).Parts()&PartMouth != 0 {
+					safe = false
+				}
+			}
+			if !safe {
+				t.Errorf("%s/%s: Only(^PartMouth) still yields mouth overlays", s.Name, n)
+			}
+			if n == "gasp" && e.Parts()&PartMouth == 0 {
+				t.Errorf("%s/gasp: moves the mouth but does not declare it", s.Name)
+			}
+		}
+	}
+}
+
+func TestNewSpriteValidates(t *testing.T) {
+	good := []string{"KKWW", "KKWW"}
+	if _, err := NewSprite("ok", good); err != nil {
+		t.Errorf("valid sprite rejected: %v", err)
+	}
+	for _, c := range []struct {
+		name string
+		art  []string
+		want string
+	}{
+		{"", good, "name"},
+		{"empty", nil, "empty"},
+		{"ragged", []string{"KKWW", "KKW"}, "rectangular"},
+		{"bogus", []string{"KKZZ", "KKWW"}, "unknown role"},
+	} {
+		if _, err := NewSprite(c.name, c.art); err == nil {
+			t.Errorf("%s: expected an error mentioning %q, got none", c.name, c.want)
+		}
+	}
+	// an odd row count is padded, not refused: it is always the right fix
+	s, err := NewSprite("odd", []string{"KK", "WW", "KK"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, h := s.Size(); h%2 != 0 {
+		t.Errorf("odd art was not padded to an even height, got %d", h)
+	}
+}
+
+func TestSpriteFileRoundTrip(t *testing.T) {
+	var buf strings.Builder
+	if err := WriteSprite(&buf, FrontView); err != nil {
+		t.Fatal(err)
+	}
+	back, err := ParseSprite(strings.NewReader(buf.String()))
+	if err != nil {
+		t.Fatalf("re-reading what we wrote: %v", err)
+	}
+	if back.Name != FrontView.Name {
+		t.Errorf("name %q, want %q", back.Name, FrontView.Name)
+	}
+	a, b := FrontView.Pixels(nil), back.Pixels(nil)
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("art row %d changed through a round trip", i)
+		}
+	}
+	if len(back.Mouths) != len(FrontView.Mouths) {
+		t.Errorf("mouths %d, want %d", len(back.Mouths), len(FrontView.Mouths))
+	}
+	// and it still renders identically
+	th := DefaultTheme()
+	x := FrontView.CellsAt(th, Quadrant, 14, 14, FrontView.Mouth(2))
+	y := back.CellsAt(th, Quadrant, 14, 14, back.Mouth(2))
+	for r := range x {
+		for c := range x[r] {
+			if x[r][c] != y[r][c] {
+				t.Fatalf("round-tripped sprite renders differently at %d,%d", c, r)
+			}
 		}
 	}
 }

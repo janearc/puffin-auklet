@@ -150,6 +150,42 @@
 // Between those two, overlays cover what a mascot in a status bar actually
 // does: blink, talk, and look at things.
 //
+// # Making your own bird
+//
+// NewSprite is the way in for art that did not ship here. It validates rather
+// than trusts: a ragged row or a stray character fails there, loudly, instead
+// of rendering a hole three sizes later.
+//
+// ParseSprite reads a sprite from a text file, which matters more than it
+// looks. The point of publishing this is that somebody who does not write Go
+// can draw a bird, put it in a gist, and have it work.
+//
+// The role alphabet in role.go is the contract that makes a stranger's bird
+// themeable. The names are the puffin's; the slots are not. A gopher's buck
+// teeth are the three beak roles and its paws are RoleFeet.
+//
+// # Emotes
+//
+// An Emote is a named frame series: poses with per-frame holds. Sprite.Emotes
+// enumerates them, so a script can be validated before a recording rather than
+// during it.
+//
+// They settle by construction. Emote.Pose returns (nil, false) once a
+// non-looping series is over, so a bird cannot be stuck in the last frame of
+// "startled" because the next cue arrived early. Interruption is likewise
+// nothing special: stop asking for poses and the bird is at rest on the next
+// frame, because a pose is an overlay rather than a state.
+//
+// Overlays declare which Part they drive, so speech and emotes can be checked
+// for collision instead of silently fighting. The rule: THE MOUTH TRACK OWNS
+// THE MOUTH WHILE SPEECH IS PLAYING. An emote during narration should be
+// filtered:
+//
+//	pose := emote.Pose(elapsed).Only(^auklet.PartMouth)
+//
+// Emote.Parts says up front whether a series would collide, so a caller can
+// refuse a cue rather than stutter the track.
+//
 // # Relationship to splash.go
 //
 // puffin's existing splash already separates beak from plumage so the beak can
