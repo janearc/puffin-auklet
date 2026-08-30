@@ -134,13 +134,21 @@
 // Gaze shifts the pupils, so the bird can look at whatever the application is
 // attending to. scene.GazeAt turns a world-space target into that pose.
 //
+// WideEyes opens the eyes, and it is the strongest thing the bird has at small
+// sizes -- it out-reads a blink at every size and roughly doubles a gaze at
+// eight rows, where a pupil cannot travel far enough to be seen. If you have
+// room for exactly one reaction on a short terminal, this is it. Both are
+// derived from the art rather than declared, so a sprite nobody here drew gets
+// them for nothing.
+//
 // # What can and cannot move
 //
 // A part can move exactly as far as there is art behind it.
 //
-// The pupil can move: the socket it sits in is already drawn, so shifting it
-// uncovers ring rather than a hole. That is Gaze, and it is why looking around
-// cost forty lines.
+// The pupil can move, and the eye can grow: the socket is already drawn and the
+// cheek around it is too, so both uncover art rather than a hole. That is Gaze
+// and WideEyes, and it is why looking around and being surprised each cost
+// forty lines and no drawing.
 //
 // The beak cannot. The base art is one flat grid with nothing drawn behind
 // anything else, so sliding it leaves a hole in the head. That needs layers

@@ -46,6 +46,9 @@ func main() {
 		pose = append(pose, sp.Blink...)
 	}
 	pose = append(pose, sp.Gaze(argi(6, 0), argi(7, 0))...)
+	if f := argi(8, 0); f > 0 {
+		pose = append(pose, sp.WideEyes(float64(f)/10)...)
+	}
 	grid := sp.CellsAt(t, gs, cols, rows, pose)
 	cw, ch := gs.Dims()
 	fmt.Printf("# %d %d %d %d\n", cols, rows, cw, ch)

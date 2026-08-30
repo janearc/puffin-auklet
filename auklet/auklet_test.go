@@ -499,3 +499,58 @@ func TestTransformEmotes(t *testing.T) {
 		}
 	}
 }
+
+// Eyes wide is the strongest thing the bird has at small sizes, which is where
+// it matters: at eight rows the pupil cannot travel far enough to be seen. If a
+// change makes surprise quieter than a blink, that is a regression in the one
+// place the corner bird depends on.
+func TestWideEyesOutReadsBlink(t *testing.T) {
+	th := DefaultTheme()
+	for _, s := range Views() {
+		for _, rows := range []int{8, 11, 14, 22} {
+			cols := s.ColsFor(rows)
+			count := func(p Pose) int {
+				rest := s.CellsAt(th, Quadrant, cols, rows, nil)
+				got := s.CellsAt(th, Quadrant, cols, rows, p)
+				n := 0
+				for y := range rest {
+					for x := range rest[y] {
+						if rest[y][x] != got[y][x] {
+							n++
+						}
+					}
+				}
+				return n
+			}
+			wide, blink := count(s.WideEyes(1.6)), count(s.Blink)
+			if wide <= blink {
+				t.Errorf("%s at %d rows: wide eyes change %d cells, blink %d; "+
+					"surprise must out-read a blink", s.Name, rows, wide, blink)
+			}
+		}
+	}
+}
+
+func TestWideEyesStayOnTheFace(t *testing.T) {
+	for _, s := range Views() {
+		rest := s.Pixels(nil)
+		// a big factor must be trimmed, not spill over the cap or the beak
+		posed := s.Pixels(s.WideEyes(3))
+		for y := range rest {
+			for x := 0; x < len(rest[y]); x++ {
+				if rest[y][x] == posed[y][x] {
+					continue
+				}
+				switch rest[y][x] {
+				case RoleLight, RolePupil, RoleEyeRing, RoleStripe:
+				default:
+					t.Fatalf("%s: wide eyes painted over %s at %d,%d",
+						s.Name, RoleName(rest[y][x]), x, y)
+				}
+			}
+		}
+		if s.WideEyes(1) != nil {
+			t.Errorf("%s: factor 1 should be a no-op", s.Name)
+		}
+	}
+}
