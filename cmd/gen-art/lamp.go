@@ -22,8 +22,15 @@ package main
 // sprite in the package that genuinely has none, so Gaze and WideEyes find
 // nothing and quietly do nothing, which is the correct behaviour for a
 // subject that was never going to have a pupil.
-func drawLampFront() *drawing {
-	const W, H = 34, 48
+// drawLamp is shared by both lamp views. withBall draws Luxo's other
+// signature prop permanently into the art -- a POSE cannot do this: trim()
+// fixes a sprite's canvas to the bounding box of whatever the BASE art
+// actually paints, once, at generation time, and an overlay can only add
+// pixels inside bounds that already exist. "sometimes" the ball means two
+// views, front and front-ball, the same way the gopher is one character
+// with several Sprites rather than one Sprite trying to be several shapes.
+func drawLamp(withBall bool) *drawing {
+	const W, H = 44, 48
 	d := newDrawing(W, H)
 
 	// the base: a wide low dome, weighted, flat on the desk
@@ -108,13 +115,41 @@ func drawLampFront() *drawing {
 		}
 	}
 
+	// the ball: Luxo's other prop, resting beside the base on the same
+	// ground line. Role O -- unused otherwise in this sprite (see the note
+	// above the base's own feet-that-aren't) -- so it is not competing with
+	// anything else in the alphabet for a colour.
+	if withBall {
+		for y := 0; y < H; y++ {
+			for x := 0; x < W; x++ {
+				if inEllipse(x, y, 37, 41, 4.5, 4.5) {
+					d.set(x, y, 'O')
+				}
+			}
+		}
+		// a highlight, the same cheap roundness trick the base's arc uses
+		for y := 0; y < H; y++ {
+			for x := 0; x < W; x++ {
+				if inEllipse(x, y, 35.5, 39, 1.6, 1.2) {
+					d.set(x, y, 'D')
+				}
+			}
+		}
+	}
+
 	return d
 }
+
+func drawLampFront() *drawing     { return drawLamp(false) }
+func drawLampFrontBall() *drawing { return drawLamp(true) }
 
 func lampJobs() []job {
 	return []job{
 		{"auklet/lamp_front_art.go", "lampFrontArt",
 			"The lamp, front-on: a weighted base, a springy double-bent arm, and a tilted conical shade with the bulb glowing at its mouth. No eyes -- the real thing has never had any; what reads as looking at something is the whole neck and shade turning, which is Transform's job, not the art's.",
 			drawLampFront},
+		{"auklet/lamp_front_ball_art.go", "lampFrontBallArt",
+			"The lamp, front-on, with the ball beside it -- Luxo's other prop. Same drawing as lampFrontArt; the ball is drawn permanently into this view rather than posed, because a pose cannot grow a sprite's canvas past what trim() already fixed at generation time.",
+			drawLampFrontBall},
 	}
 }
