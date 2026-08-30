@@ -2,7 +2,9 @@
 // cutout transparency, a window to move it around in and out of, and the poses
 // it needs to present to camera.
 //
-//	-character NAME   start on this one; -character=list prints the roster
+//	-character NAME   start on this one
+//	-roster           list the character roster
+//	-roster show      render a preview of each, themed with its own default
 //
 //	f                 cycle focus: auklet / window / view
 //	arrows, hjkl      move whatever has focus      shift+arrows  by 5
@@ -21,6 +23,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"strings"
@@ -31,6 +34,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/janearc/puffin-auklet/auklet"
+	"github.com/janearc/puffin-auklet/canvas"
 	"github.com/janearc/puffin-auklet/scene"
 	"github.com/janearc/puffin-auklet/themes"
 )
@@ -595,8 +599,8 @@ func defaultThemeIdx() []int {
 	idx := make([]int, len(chars))
 	for i, c := range chars {
 		name := "corvid"
-		if c.Name == "gopher" {
-			name = "gopher"
+		if c.Name == "gopher" || c.Name == "lamp" {
+			name = c.Name
 		}
 		idx[i] = themeNamed(name)
 	}
@@ -623,11 +627,41 @@ func characterIndex(name string) int {
 	return 0
 }
 
+// showRoster prints every character's front view, themed with its own
+// default (defaultThemeIdx's mapping, the same one a fresh TUI opens each
+// one with), so "what do I have" is answerable without launching the
+// workbench and pressing n through all of them.
+func showRoster(w io.Writer) {
+	idx := defaultThemeIdx()
+	for i, cs := range auklet.Characters() {
+		var sprite auklet.Sprite
+		for _, s := range cs.Views {
+			if s.Name == "front" {
+				sprite = s
+			}
+		}
+		if sprite.Name == "" && len(cs.Views) > 0 {
+			sprite = cs.Views[0]
+		}
+		t := themes.All[idx[i]]
+		fmt.Fprintf(w, "%s  (%s theme)\n", cs.Name, t.Name)
+		rows := 16
+		cells := sprite.CellsAt(t.Theme, auklet.Quadrant, sprite.ColsFor(rows), rows, nil)
+		fmt.Fprintln(w, canvas.Render(cells))
+		fmt.Fprintln(w)
+	}
+}
+
 func main() {
-	character := flag.String("character", "auklet", "start on this one -- see -character=list for the roster")
+	character := flag.String("character", "auklet", "start on this one")
+	roster := flag.Bool("roster", false, "list the character roster; `-roster show` renders a preview of each")
 	flag.Parse()
 
-	if *character == "list" {
+	if *roster {
+		if flag.Arg(0) == "show" {
+			showRoster(os.Stdout)
+			return
+		}
 		names := make([]string, len(auklet.Characters()))
 		for i, c := range auklet.Characters() {
 			names[i] = c.Name
