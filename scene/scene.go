@@ -40,7 +40,8 @@ type Opts struct {
 	Theme    themes.Named
 	Backdrop int
 	Glyphs   puffin.GlyphSet
-	Rows     int // sprite height in cells; width follows from the aspect
+	Sprite   puffin.Sprite // zero value means the side view
+	Rows     int           // sprite height in cells; width follows from the aspect
 
 	SpriteX, SpriteY int // WORLD coordinates
 	Win              Window
@@ -68,8 +69,8 @@ func Build(o Opts) *canvas.Canvas {
 	win := canvas.New(o.Win.W, o.Win.H)
 	backdrop(win, o.Backdrop, t, field)
 
-	cols := puffin.ColsFor(o.Rows)
-	win.Blit(puffin.CellsPosed(t, o.Glyphs, cols, o.Rows, o.Pose),
+	sp := o.sprite()
+	win.Blit(sp.CellsAt(t, o.Glyphs, sp.ColsFor(o.Rows), o.Rows, o.Pose),
 		o.SpriteX-o.Win.WorldX, o.SpriteY-o.Win.WorldY)
 
 	screen.BlitCanvas(win, o.Win.ScreenX, o.Win.ScreenY)
@@ -119,9 +120,16 @@ func backdrop(c *canvas.Canvas, which int, t puffin.Theme, field lipgloss.Termin
 	}
 }
 
+func (o Opts) sprite() puffin.Sprite {
+	if o.Sprite.Name == "" {
+		return puffin.SideView
+	}
+	return o.Sprite
+}
+
 // SpriteRect returns the sprite's bounds in world space.
 func SpriteRect(o Opts) (x, y, w, h int) {
-	return o.SpriteX, o.SpriteY, puffin.ColsFor(o.Rows), o.Rows
+	return o.SpriteX, o.SpriteY, o.sprite().ColsFor(o.Rows), o.Rows
 }
 
 // Visible reports whether any part of the sprite falls inside the window.

@@ -30,8 +30,8 @@ var roleWeight = map[byte]float64{
 	'.': 1,
 }
 
-// SourceSize reports the stencil's dimensions in source pixels.
-func SourceSize() (w, h int) { return len(art[0]), len(art) }
+// SourceSize reports the side view's dimensions in source pixels.
+func SourceSize() (w, h int) { return SideView.Size() }
 
 // ColsFor returns the column count that preserves the bird's proportions at a
 // given row count.
@@ -39,16 +39,19 @@ func SourceSize() (w, h int) { return len(art[0]), len(art) }
 // a terminal cell is about twice as tall as it is wide, so a picture that is
 // square on screen is not square in cells. this is the only place that ratio is
 // applied; everything else works in whatever grid it is handed.
-func ColsFor(rows int) int {
-	sw, sh := SourceSize()
+func ColsFor(rows int) int { return SideView.ColsFor(rows) }
+
+func colsFor(sw, sh, rows int) int {
 	return int(math.Round(float64(rows) * 2 * float64(sw) / float64(sh)))
 }
 
 // RowsToFit returns the largest row count whose sprite fits inside maxCols by
 // maxRows, at least 3.
-func RowsToFit(maxCols, maxRows int) int {
+func RowsToFit(maxCols, maxRows int) int { return SideView.RowsToFit(maxCols, maxRows) }
+
+func (s Sprite) RowsToFit(maxCols, maxRows int) int {
 	rows := maxRows
-	for rows > 3 && ColsFor(rows) > maxCols {
+	for rows > 3 && s.ColsFor(rows) > maxCols {
 		rows--
 	}
 	if rows < 3 {
@@ -65,18 +68,23 @@ func RowsToFit(maxCols, maxRows int) int {
 // set here is complete, the shape is always exact and only the colour is
 // approximated.
 func CellsAt(t Theme, gs GlyphSet, cols, rows int) [][]canvas.Cell {
-	return CellsPosed(t, gs, cols, rows, nil)
+	return SideView.CellsAt(t, gs, cols, rows, nil)
 }
 
 // CellsPosed is CellsAt with a pose stamped in first.
 func CellsPosed(t Theme, gs GlyphSet, cols, rows int, pose Pose) [][]canvas.Cell {
+	return SideView.CellsAt(t, gs, cols, rows, pose)
+}
+
+// CellsAt renders this sprite into exactly cols by rows cells.
+func (s Sprite) CellsAt(t Theme, gs GlyphSet, cols, rows int, pose Pose) [][]canvas.Cell {
 	if cols < 1 {
 		cols = 1
 	}
 	if rows < 1 {
 		rows = 1
 	}
-	src := pose.apply()
+	src := pose.applyTo(s.art)
 	cw, ch := gs.Dims()
 	subW, subH := cols*cw, rows*ch
 	srcW, srcH := len(src[0]), len(src)

@@ -25,8 +25,8 @@ type Overlay struct {
 // Pose is a set of overlays applied in order. the zero Pose is the bird at rest.
 type Pose []Overlay
 
-// Blink closes the eye: lid down, and the orbital ring goes with it.
-var Blink = Overlay{
+// sideBlink closes the side view's eye: lid down, ring goes with it.
+var sideBlink = Pose{{
 	Name: "blink", OX: 17, OY: 8,
 	// the lid stops short of the nape stripe on purpose. run them together and
 	// the two read as one long slot rather than as a closed eye.
@@ -36,18 +36,18 @@ var Blink = Overlay{
 		".DDDD.",
 		".WWWW.",
 	},
-}
+}}
 
-// apply returns the base art with the pose stamped into it. it copies, so the
-// package's art is never mutated -- a pose that leaked into the base would be a
-// bird that never opened its eye again.
-func (p Pose) apply() []string {
+// applyTo returns base with the pose stamped into it. it copies, so a sprite's
+// art is never mutated -- a pose that leaked into the base would be a bird that
+// never opened its eye again.
+func (p Pose) applyTo(base []string) []string {
 	if len(p) == 0 {
-		return art
+		return base
 	}
-	out := make([]string, len(art))
-	buf := make([][]byte, len(art))
-	for i, row := range art {
+	out := make([]string, len(base))
+	buf := make([][]byte, len(base))
+	for i, row := range base {
 		buf[i] = []byte(row)
 	}
 	for _, o := range p {

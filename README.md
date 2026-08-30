@@ -21,8 +21,12 @@ that happened.
 | key | does |
 |---|---|
 | `f` | cycle focus: auklet, window, view |
-| `a` | animation on/off |
+| `a` | idle animation on/off |
 | `e` | blink now |
+| `y` | side view / front view |
+| `t` | narrate |
+| `m` | the intro |
+| `s` | slide out of sight, or back |
 | arrows, `hjkl` | move whatever has focus |
 | shift + arrows | move it by 5 |
 | `+` / `-` | sprite size |
@@ -175,6 +179,70 @@ first thing to reach for if a feature disappears too early.
 It stays legible down to about eight rows on sextants. Below that it is a dark
 bird with an orange wedge, which is still more puffin than most things.
 
+## Two views
+
+| view | what it is for |
+|---|---|
+| `SideView` | the profile. Reads at the smallest sizes, because the beak is doing all the work. |
+| `FrontView` | facing the reader. The one that can talk. |
+
+Head-on, the beak is a narrow blade rather than the profile's wedge -- it is
+flattened side to side, so the feature that makes a puffin a puffin is the thing
+that mostly disappears. What carries the read instead is the symmetry: two white
+cheeks split by that blade, two ringed eyes set high and close. Draw the front
+view with a profile beak and it stops being a puffin immediately.
+
+Poses belong to a sprite, not to the package, because they are coordinates
+rather than concepts. "Blink" in profile is one eyelid in one place; head-on it
+is two, somewhere else. An overlay from the wrong view lands on the wrong pixels
+and the bird gets a lid across its cheek.
+
+## Narration
+
+`FrontView` has four mouth shapes, shut to wide. `MouthTrack` turns a line of
+text into one level per frame:
+
+    track := puffin.MouthTrack("hello. i am a puffin.", 24)
+    pose  := puffin.FrontView.Mouth(track[frame])
+
+This is not phoneme-accurate lip sync and does not try to be. It is the trick
+cheap 2D animation has always used: group the text into rough syllables, open on
+the vowel, tick through the consonants, shut on the punctuation. At a puffin's
+size nobody is reading its beak. What sells it is that the mouth moves *with* the
+sentence and stops at the full stop, and that costs forty lines and no audio
+pipeline.
+
+It is deterministic -- the same text always gives the same track -- so a take can
+be reproduced exactly.
+
+The side view has no mouth shapes. Opening a beak in profile means swinging the
+lower mandible away from the head, and the head behind it was never drawn.
+
+## Rendering to video
+
+`cmd/render` writes PNG frames with a **real alpha channel**, so the bird can be
+composited over a screen recording instead of filmed off a terminal. Transparent
+pixels are alpha 0, not a background colour: there is no key to pull and no
+fringe to clean up.
+
+    go run ./cmd/render -text "hello. i am a puffin." -fps 24 -out frames/
+    go run ./cmd/render -still -scale 16 -out .
+
+| flag | default | notes |
+|---|---|---|
+| `-theme` | `corvid` | any dodo theme; it is validated before a frame is written |
+| `-view` | `front` | `side` or `front` |
+| `-scale` | `12` | pixels per source pixel; nearest neighbour, deliberately |
+| `-fps` | `24` | |
+| `-still` | | one frame, beak shut |
+| `-opaque` | | fill the background instead of leaving it transparent |
+| `-seed` | `1` | blink timing. Same seed, same take. |
+
+Same sprite, same themes, same mouth track as the viewer -- only the last step
+differs. Colour is chosen last by design, so a renderer that is not a terminal
+costs one file rather than a second bird. `Sprite.Pixels(pose)` is the hook if
+you want to draw the bird somewhere else again.
+
 ## Posing
 
 The base art is one flat grid: every pixel belongs to exactly one part and
@@ -238,6 +306,7 @@ of a rectangular halo, and it is the part to be careful with when editing
 | `cmd/shot` | renders one composed screen to stdout, no TTY needed |
 | `cmd/dump` | one line per cell, for checking a render without parsing escapes |
 | `cmd/sizes` | dumps the sprite alone at a given glyph set and row count |
+| `cmd/render` | PNG frames with alpha, for compositing into video |
 
 Three of the seven themes exist to fail. `nord` is a real palette that misses the
 silhouette gate by three thousandths, `ansi16` demonstrates the unverifiable

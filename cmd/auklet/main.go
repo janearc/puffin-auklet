@@ -1,18 +1,18 @@
 // auklet is a workbench for the puffin sprite: dodo's themes, arbitrary size,
-// cutout transparency, and a window to move it around in and out of.
+// cutout transparency, a window to move it around in and out of, and the poses
+// it needs to present to camera.
 //
 //	f                 cycle focus: auklet / window / view
-//	a                 animation on/off             e             blink now
 //	arrows, hjkl      move whatever has focus      shift+arrows  by 5
 //	+ / -             sprite size                  g             glyph set
 //	[ ] { }           window width / height
+//	y                 side view / front view
+//	t                 narrate                      m             the intro
+//	s                 slide out of sight, or back  e             blink now
+//	a                 idle animation on/off
 //	tab               theme                        b             backdrop
 //	c                 cutout                       v             validator
 //	r                 reset                        q             quit
-//
-// the auklet's position is in world space and is never clamped. move it off the
-// window and it keeps its coordinates; the border grows a pointer showing which
-// way it went.
 package main
 
 import (
@@ -30,7 +30,13 @@ import (
 	"github.com/janearc/puffin-auklet/themes"
 )
 
-const hudRows = 3
+const (
+	hudRows = 3
+	fps     = 10
+)
+
+// the line is only here so there is something to say. any text works.
+const sample = "hello. i am a puffin, and i will be narrating this software."
 
 type focus int
 
@@ -55,8 +61,10 @@ type model struct {
 	theme    int
 	backdrop int
 	glyphs   puffin.GlyphSet
+	view     int
 	rows     int
 	sx, sy   int // sprite, in WORLD coordinates -- never clamped
+	restY    int // where the bird sits when it is on stage
 	win      scene.Window
 	focus    focus
 	cutout   bool
@@ -69,17 +77,22 @@ type model struct {
 	blinking bool
 	frame    int
 	next     int
+
+	hidden bool  // slid away
+	track  []int // narration, one mouth level per frame
+	pos    int
+	roar   int // frame within the intro, or -1
 }
 
 type tickMsg struct{}
 
-// 100ms is slow enough to cost nothing and fast enough that a two-frame blink
-// looks like a blink rather than a glitch.
 func tick() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
+	return tea.Tick(time.Second/fps, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 func (m model) Init() tea.Cmd { return tick() }
+
+func (m *model) sprite() puffin.Sprite { return puffin.Views()[m.view] }
 
 func (m *model) reset() {
 	screenH := m.h - hudRows
@@ -90,9 +103,12 @@ func (m *model) reset() {
 	if m.win.W > m.w-6 {
 		m.win.W = m.w - 6
 	}
-	m.rows = min(puffin.RowsToFit(m.win.W, m.win.H), 22)
-	m.sx = m.win.WorldX + (m.win.W-puffin.ColsFor(m.rows))/2
-	m.sy = m.win.WorldY + (m.win.H-m.rows)/2
+	m.rows = min(m.sprite().RowsToFit(m.win.W, m.win.H), 22)
+	m.sx = m.win.WorldX + (m.win.W-m.sprite().ColsFor(m.rows))/2
+	m.restY = m.win.WorldY + (m.win.H-m.rows)/2
+	m.sy = m.restY
+	m.hidden, m.roar = false, -1
+	m.track, m.pos = nil, 0
 }
 
 // the window is kept on screen; the bird is not. that asymmetry is the point.
@@ -103,10 +119,51 @@ func (m *model) clampWindow() {
 	m.win.ScreenY = clamp(m.win.ScreenY, 1, m.h-hudRows-m.win.H-1)
 }
 
+// offstage is far enough below the window that no part of the bird shows.
+func (m model) offstage() int { return m.win.WorldY + m.win.H + 2 }
+
+// glide eases toward a target rather than snapping, because an entrance that
+// arrives instantly is not an entrance.
+func glide(cur, want int) int {
+	d := want - cur
+	if d == 0 {
+		return cur
+	}
+	step := d / 3
+	if step == 0 {
+		if d > 0 {
+			step = 1
+		} else {
+			step = -1
+		}
+	}
+	return cur + step
+}
+
+// the intro: rise into frame, then three calls, then settle. the shape is
+// stolen wholesale and it is the right shape.
+var introScript = []struct {
+	until int
+	mouth int
+}{
+	{12, 0}, {19, 3}, {24, 0}, {31, 3}, {36, 0}, {43, 3}, {50, 0},
+}
+
+func (m *model) talkOnly() {
+	// only the front view has a beak that opens; presenting in profile would
+	// mean swinging a mandible away from a head that was never drawn.
+	for i, s := range puffin.Views() {
+		if s.Name == "front" {
+			m.view = i
+		}
+	}
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		m.frame++
+
 		if m.animate {
 			switch {
 			case m.blinking && m.frame >= m.next+2:
@@ -116,7 +173,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.blinking = true
 			}
 		}
+		if len(m.track) > 0 {
+			m.pos++
+			if m.pos >= len(m.track) {
+				m.track, m.pos = nil, 0
+			}
+		}
+		if m.roar >= 0 {
+			m.roar++
+			if m.roar > introScript[len(introScript)-1].until {
+				m.roar = -1
+			}
+		}
+
+		want := m.restY
+		if m.hidden {
+			want = m.offstage()
+		}
+		m.sy = glide(m.sy, want)
 		return m, tick()
+
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		if !m.ready {
@@ -124,6 +200,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 		m.clampWindow()
+
 	case tea.KeyMsg:
 		step := 1
 		k := msg.String()
@@ -146,6 +223,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dy = step
 		case "f":
 			m.focus = (m.focus + 1) % 3
+		case "y":
+			m.view = (m.view + 1) % len(puffin.Views())
+			m.rows = min(m.rows, m.sprite().RowsToFit(m.win.W, m.win.H))
+		case "t":
+			m.talkOnly()
+			m.hidden = false
+			m.track, m.pos = puffin.MouthTrack(sample, fps), 0
+		case "m":
+			m.talkOnly()
+			m.hidden = false
+			m.sy = m.offstage()
+			m.roar = 0
+			m.track, m.pos = nil, 0
+		case "s":
+			m.hidden = !m.hidden
 		case "tab":
 			m.theme = (m.theme + 1) % len(themes.All)
 		case "backtab":
@@ -164,15 +256,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.win.H--
 		case "}":
 			m.win.H++
-		case "c":
-			m.cutout = !m.cutout
-		case "b":
-			m.backdrop = (m.backdrop + 1) % len(scene.BackdropNames)
 		case "a":
 			m.animate = !m.animate
 			m.next = m.frame + 5
 		case "e":
 			m.blinking = !m.blinking
+		case "c":
+			m.cutout = !m.cutout
+		case "b":
+			m.backdrop = (m.backdrop + 1) % len(scene.BackdropNames)
 		case "v":
 			m.showVal = !m.showVal
 		case "r":
@@ -182,6 +274,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.focus {
 		case focusSprite:
 			m.sx += dx
+			m.restY += dy
 			m.sy += dy
 		case focusWindow:
 			m.win.ScreenX += dx
@@ -197,21 +290,51 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// pose is the whole performance, resolved for this frame. the intro outranks
+// narration, narration outranks idle blinking, and a shut beak is the default.
+func (m model) pose() puffin.Pose {
+	sp := m.sprite()
+	var p puffin.Pose
+
+	switch {
+	case m.roar >= 0:
+		for _, step := range introScript {
+			if m.roar <= step.until {
+				p = append(p, sp.Mouth(step.mouth)...)
+				break
+			}
+		}
+	case len(m.track) > 0:
+		p = append(p, sp.Mouth(m.track[m.pos])...)
+	}
+
+	if m.blinking {
+		p = append(p, sp.Blink...)
+	}
+	return p
+}
+
+func (m model) state() string {
+	switch {
+	case m.roar >= 0:
+		return "intro"
+	case len(m.track) > 0:
+		return "narrating"
+	case m.hidden:
+		return "offstage"
+	default:
+		return "idle"
+	}
+}
+
 func (m model) opts() scene.Opts {
 	return scene.Opts{
 		Theme: themes.All[m.theme], Backdrop: m.backdrop,
-		Glyphs: m.glyphs, Rows: m.rows,
+		Glyphs: m.glyphs, Sprite: m.sprite(), Rows: m.rows,
 		SpriteX: m.sx, SpriteY: m.sy, Win: m.win,
 		Cutout: m.cutout, W: m.w, H: m.h - hudRows,
 		Pose: m.pose(),
 	}
-}
-
-func (m model) pose() puffin.Pose {
-	if m.blinking {
-		return puffin.Pose{puffin.Blink}
-	}
-	return nil
 }
 
 func (m model) View() string {
@@ -232,22 +355,21 @@ func (m model) View() string {
 	if m.cutout {
 		cut = "cutout"
 	}
-	where := "in view"
+	where := ""
 	if !scene.Visible(o) {
-		where = "OUT OF VIEW"
+		where = " OUT OF VIEW"
 	}
 
 	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
-	hud := fmt.Sprintf("%s %s  %s  %dx%d %s %s  auklet@%d,%d %s  view@%d,%d  win %dx%d",
+	hud := fmt.Sprintf("%s %s  %s  %s %dx%d %s %s  %s%s",
 		bold.Render(cur.Name), status,
 		bold.Render("["+m.focus.String()+"]"),
-		puffin.ColsFor(m.rows), m.rows, m.glyphs, cut,
-		m.sx, m.sy, faint.Render(where),
-		m.win.WorldX, m.win.WorldY, m.win.W, m.win.H)
+		m.sprite().Name, m.sprite().ColsFor(m.rows), m.rows, m.glyphs, cut,
+		bold.Render(m.state()), faint.Render(where))
 
-	help := faint.Render("f focus  arrows move  +/- size  g glyphs  [ ] { } window  tab theme  b backdrop  c cutout  a animate  r reset  q quit")
+	help := faint.Render("f focus  y view  t narrate  m intro  s slide  +/- size  g glyphs  tab theme  b backdrop  c cutout  r reset  q quit")
 	if m.showVal && err != nil {
 		help = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
 			Render(strings.ReplaceAll(err.Error(), "\n", "  |  "))
@@ -269,7 +391,7 @@ func clamp(v, lo, hi int) int {
 func main() {
 	p := tea.NewProgram(model{
 		glyphs: puffin.Quadrant, cutout: true, backdrop: 2, showVal: true,
-		animate: true, next: 20,
+		animate: true, next: 20, roar: -1,
 	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -19,7 +19,7 @@ import (
 	"github.com/janearc/puffin-auklet/canvas"
 )
 
-// Width and Height are the widget's terminal footprint, in cells.
+// Width and Height are the side view's footprint at native size, in cells.
 const (
 	Width  = 39
 	Height = 22
@@ -104,7 +104,7 @@ func (t Theme) colorFor(c byte) lipgloss.TerminalColor {
 }
 
 // '.' is transparent and takes the theme's Background.
-var art = []string{
+var sideArt = []string{
 	"....................KKKKKK.............",
 	".................KKKKKKKKKKKK..........",
 	"................KKKKKKKKKKKKKK.........",
@@ -367,4 +367,20 @@ func Luminance(c lipgloss.TerminalColor) (float64, bool) {
 		return 0, false
 	}
 	return lum(vs[len(vs)-1]), true
+}
+
+// RoleColor maps one role byte to its colour under this theme. '.' and any
+// unknown byte return Background, which may be nil for a cutout.
+func (t Theme) RoleColor(role byte) lipgloss.TerminalColor { return t.colorFor(role) }
+
+// RGB resolves a colour to eight-bit components. it reads the declared value
+// rather than asking the renderer, for the same reason Validate does: the
+// renderer's answer depends on a terminal that an image encoder does not have.
+func RGB(c lipgloss.TerminalColor) (r, g, b uint8, ok bool) {
+	vs, ok := resolve(c)
+	if !ok || len(vs) == 0 {
+		return 0, 0, 0, false
+	}
+	v := vs[len(vs)-1]
+	return uint8(v.r*255 + 0.5), uint8(v.g*255 + 0.5), uint8(v.b*255 + 0.5), true
 }
