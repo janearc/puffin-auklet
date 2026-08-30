@@ -159,42 +159,14 @@ func SizeAt(scale int) (w, h int) {
 	return Width * scale, Height * scale
 }
 
-// Cells returns the sprite as a cell grid, nearest-neighbour scaled by an
-// integer factor, ready for canvas.Blit.
-//
-// two pixel rows share one cell via a half-block. which glyph a cell gets
-// depends on which of its two halves survive: both opaque is the usual
-// foreground-over-background pair, one opaque flips to whichever half-block
-// puts the colour on the right side, and neither leaves the cell empty. that
-// is what lets a cutout keep a clean edge instead of a rectangular halo.
-//
-// scale is integer and upward only. shrinking is not offered: at this size the
-// beak is the bird, and dropping every other pixel is exactly what removes it.
-// a smaller puffin needs new art, not a resample.
+// Cells returns the sprite at an integer scale using half blocks. it is a
+// thin wrapper on CellsAt, kept because scale 1 is the art's native size and
+// most callers want exactly that.
 func Cells(t Theme, scale int) [][]canvas.Cell {
 	if scale < 1 {
 		scale = 1
 	}
-	pw, ph := len(art[0])*scale, len(art)*scale
-	rows := make([][]canvas.Cell, ph/2)
-	for cy := range rows {
-		rows[cy] = make([]canvas.Cell, pw)
-		for x := 0; x < pw; x++ {
-			top := t.colorFor(art[(cy*2)/scale][x/scale])
-			bot := t.colorFor(art[(cy*2+1)/scale][x/scale])
-			switch {
-			case top == nil && bot == nil:
-				rows[cy][x] = canvas.Cell{}
-			case bot == nil:
-				rows[cy][x] = canvas.Cell{R: '▀', FG: top}
-			case top == nil:
-				rows[cy][x] = canvas.Cell{R: '▄', FG: bot}
-			default:
-				rows[cy][x] = canvas.Cell{R: '▀', FG: top, BG: bot}
-			}
-		}
-	}
-	return rows
+	return CellsAt(t, Half, Width*scale, Height*scale)
 }
 
 // Render returns the puffin as a printable string at scale 1, Height lines

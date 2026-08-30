@@ -1,12 +1,17 @@
-// auklet is a workbench for the puffin sprite: cycle dodo's themes, move
-// it, scale it, and toggle the cutout against backdrops that make transparency
-// obvious.
+// auklet is a workbench for the puffin sprite: dodo's themes, arbitrary size,
+// cutout transparency, and a window to move it around in and out of.
 //
-//	arrows / hjkl     move          shift+arrows  move faster
-//	tab / shift+tab   theme         + / -         scale
-//	c                 cutout        b             backdrop
-//	v                 validator     r             recentre
-//	q / esc / ctrl-c  quit
+//	f                 cycle focus: auklet / window / view
+//	arrows, hjkl      move whatever has focus      shift+arrows  by 5
+//	+ / -             sprite size                  g             glyph set
+//	[ ] { }           window width / height
+//	tab               theme                        b             backdrop
+//	c                 cutout                       v             validator
+//	r                 reset                        q             quit
+//
+// the auklet's position is in world space and is never clamped. move it off the
+// window and it keeps its coordinates; the border grows a pointer showing which
+// way it went.
 package main
 
 import (
@@ -24,47 +29,73 @@ import (
 
 const hudRows = 3
 
+type focus int
+
+const (
+	focusSprite focus = iota
+	focusWindow
+	focusView
+)
+
+func (f focus) String() string {
+	switch f {
+	case focusWindow:
+		return "window"
+	case focusView:
+		return "view"
+	default:
+		return "auklet"
+	}
+}
+
 type model struct {
 	theme    int
 	backdrop int
-	scale    int
-	x, y     int
+	glyphs   puffin.GlyphSet
+	rows     int
+	sx, sy   int // sprite, in WORLD coordinates -- never clamped
+	win      scene.Window
+	focus    focus
 	cutout   bool
 	showVal  bool
 	w, h     int
-	placed   bool
+	ready    bool
 	quitting bool
 }
 
 func (m model) Init() tea.Cmd { return nil }
 
-func (m *model) centre() {
-	sw, sh := puffin.SizeAt(m.scale)
-	m.x = (m.w - sw) / 2
-	m.y = (m.h - hudRows - sh) / 2
-	m.clamp()
+func (m *model) reset() {
+	screenH := m.h - hudRows
+	m.win = scene.Window{
+		W: max(12, m.w*2/3), H: max(6, screenH-6),
+		ScreenX: 3, ScreenY: 2,
+	}
+	if m.win.W > m.w-6 {
+		m.win.W = m.w - 6
+	}
+	m.rows = min(puffin.RowsToFit(m.win.W, m.win.H), 22)
+	m.sx = m.win.WorldX + (m.win.W-puffin.ColsFor(m.rows))/2
+	m.sy = m.win.WorldY + (m.win.H-m.rows)/2
 }
 
-// the sprite may hang off an edge, but never so far that it is entirely gone --
-// losing it off-screen with no way back is a bad workbench.
-func (m *model) clamp() {
-	sw, sh := puffin.SizeAt(m.scale)
-	minX, maxX := -sw+4, m.w-4
-	minY, maxY := -sh+2, m.h-hudRows-2
-	m.x = min(max(m.x, minX), maxX)
-	m.y = min(max(m.y, minY), maxY)
+// the window is kept on screen; the bird is not. that asymmetry is the point.
+func (m *model) clampWindow() {
+	m.win.W = clamp(m.win.W, 4, m.w-2)
+	m.win.H = clamp(m.win.H, 3, m.h-hudRows-2)
+	m.win.ScreenX = clamp(m.win.ScreenX, 1, m.w-m.win.W-1)
+	m.win.ScreenY = clamp(m.win.ScreenY, 1, m.h-hudRows-m.win.H-1)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
-		if !m.placed {
-			m.centre()
-			m.placed = true
-		} else {
-			m.clamp()
+		if !m.ready {
+			m.reset()
+			m.ready = true
 		}
+		m.clampWindow()
 	case tea.KeyMsg:
 		step := 1
 		k := msg.String()
@@ -72,30 +103,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			step = 5
 			k = strings.TrimPrefix(k, "shift+")
 		}
+		dx, dy := 0, 0
 		switch k {
 		case "q", "esc", "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 		case "left", "h":
-			m.x -= step
+			dx = -step
 		case "right", "l":
-			m.x += step
+			dx = step
 		case "up", "k":
-			m.y -= step
+			dy = -step
 		case "down", "j":
-			m.y += step
-		case "tab", " ":
+			dy = step
+		case "f":
+			m.focus = (m.focus + 1) % 3
+		case "tab":
 			m.theme = (m.theme + 1) % len(themes.All)
 		case "backtab":
 			m.theme = (m.theme - 1 + len(themes.All)) % len(themes.All)
 		case "+", "=":
-			if m.scale < 4 {
-				m.scale++
-			}
+			m.rows++
 		case "-", "_":
-			if m.scale > 1 {
-				m.scale--
-			}
+			m.rows--
+		case "g":
+			m.glyphs = (m.glyphs + 1) % 3
+		case "[":
+			m.win.W--
+		case "]":
+			m.win.W++
+		case "{":
+			m.win.H--
+		case "}":
+			m.win.H++
 		case "c":
 			m.cutout = !m.cutout
 		case "b":
@@ -103,60 +143,92 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "v":
 			m.showVal = !m.showVal
 		case "r":
-			m.centre()
+			m.reset()
 		}
-		m.clamp()
+
+		switch m.focus {
+		case focusSprite:
+			m.sx += dx
+			m.sy += dy
+		case focusWindow:
+			m.win.ScreenX += dx
+			m.win.ScreenY += dy
+		case focusView:
+			m.win.WorldX += dx
+			m.win.WorldY += dy
+		}
+
+		m.rows = clamp(m.rows, 3, 40)
+		m.clampWindow()
 	}
 	return m, nil
 }
 
+func (m model) opts() scene.Opts {
+	return scene.Opts{
+		Theme: themes.All[m.theme], Backdrop: m.backdrop,
+		Glyphs: m.glyphs, Rows: m.rows,
+		SpriteX: m.sx, SpriteY: m.sy, Win: m.win,
+		Cutout: m.cutout, W: m.w, H: m.h - hudRows,
+	}
+}
+
 func (m model) View() string {
-	if m.quitting || m.w == 0 {
+	if m.quitting || !m.ready {
 		return ""
 	}
+	o := m.opts()
 	cur := themes.All[m.theme]
-
-	c := scene.Build(scene.Opts{
-		Theme: cur, Backdrop: m.backdrop, Scale: m.scale,
-		X: m.x, Y: m.y, Cutout: m.cutout,
-		W: m.w, H: m.h - hudRows,
-	})
 
 	err := cur.Theme.Validate()
 	status := lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render("PASS")
 	if err != nil {
-		n := strings.Count(err.Error(), "\n") + 1
 		status = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
-			Render(fmt.Sprintf("FAIL %d", n))
+			Render(fmt.Sprintf("FAIL %d", strings.Count(err.Error(), "\n")+1))
 	}
 
 	cut := "opaque"
 	if m.cutout {
 		cut = "cutout"
 	}
+	where := "in view"
+	if !scene.Visible(o) {
+		where = "OUT OF VIEW"
+	}
+
 	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
-	hud := fmt.Sprintf("%s  %s  %s  x%d  %s  %s",
+	hud := fmt.Sprintf("%s %s  %s  %dx%d %s %s  auklet@%d,%d %s  view@%d,%d  win %dx%d",
 		bold.Render(cur.Name), status,
-		faint.Render(fmt.Sprintf("%d/%d", m.theme+1, len(themes.All))),
-		m.scale, cut, scene.BackdropNames[m.backdrop])
+		bold.Render("["+m.focus.String()+"]"),
+		puffin.ColsFor(m.rows), m.rows, m.glyphs, cut,
+		m.sx, m.sy, faint.Render(where),
+		m.win.WorldX, m.win.WorldY, m.win.W, m.win.H)
 
-	second := faint.Render("arrows move  tab theme  +/- scale  c cutout  b backdrop  v validator  r recentre  q quit")
+	help := faint.Render("f focus  arrows move  +/- size  g glyphs  [ ] { } window  tab theme  b backdrop  c cutout  r reset  q quit")
 	if m.showVal && err != nil {
-		second = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
+		help = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
 			Render(strings.ReplaceAll(err.Error(), "\n", "  |  "))
-		if len(second) > m.w*3 {
-			second = second[:m.w*3]
-		}
 	}
 
-	return c.String() + "\n" + hud + "\n" + second
+	return scene.Build(o).String() + "\n" + hud + "\n" + help
+}
+
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func main() {
-	p := tea.NewProgram(model{scale: 1, cutout: true, backdrop: 2, showVal: true},
-		tea.WithAltScreen())
+	p := tea.NewProgram(model{
+		glyphs: puffin.Quadrant, cutout: true, backdrop: 2, showVal: true,
+	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

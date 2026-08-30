@@ -20,18 +20,40 @@ that happened.
 
 | key | does |
 |---|---|
-| arrows, `hjkl` | move the sprite |
-| shift + arrows | move by 5 |
+| `f` | cycle focus: auklet, window, view |
+| arrows, `hjkl` | move whatever has focus |
+| shift + arrows | move it by 5 |
+| `+` / `-` | sprite size |
+| `g` | glyph set |
+| `[` `]` `{` `}` | window width, window height |
 | `tab` | next theme |
-| `+` / `-` | scale, 1 to 4 |
 | `c` | toggle cutout |
 | `b` | cycle backdrop |
 | `v` | toggle the validator pane |
-| `r` | recentre |
+| `r` | reset |
 | `q`, `esc`, `ctrl-c` | quit |
 
 It opens in cutout mode over the text backdrop, so the transparency is visible
 in the first frame rather than something you have to go find.
+
+## World, window, screen
+
+Three coordinate spaces, and keeping them apart is most of the design.
+
+| space | what it is |
+|---|---|
+| world | where the bird actually is. Unbounded. Never clamped. |
+| window | a rectangle of world space that is currently being shown |
+| screen | where that window is drawn in the terminal |
+
+The bird's world position survives being scrolled out of view, having the window
+moved off it, or being walked off the edge itself. It is not clipped to the
+window, hidden, or snapped back -- it is somewhere the window is not looking, and
+the border grows a `<`, `>`, `^` or `v` pointing at it. Move the window onto
+those coordinates and the whole bird is still there.
+
+The window is kept on screen. The bird is not. That asymmetry is deliberate: a
+window you can lose is a bug, a sprite you can lose is a feature.
 
 ## Using the sprite
 
@@ -40,7 +62,7 @@ in the first frame rather than something you have to go find.
 
     c := canvas.New(w, h)
     c.Fill(canvas.Cell{R: ' ', BG: pageBg})
-    c.Blit(puffin.Cells(t, 2), x, y)
+    c.Blit(puffin.CellsAt(t, puffin.Quadrant, puffin.ColsFor(12), 12), x, y)
     fmt.Print(c.String())
 
 `puffin.Render(t)` returns the bird as a plain string at scale 1 if you do not
@@ -119,11 +141,42 @@ Two honest gaps, both of which fail open:
   palette. Two distinct near-blacks can both flatten to colour 0 on an ANSI16
   terminal and the bird disappears with a clean bill of health.
 
+## Size
+
+`CellsAt(theme, glyphs, cols, rows)` renders to any size. `ColsFor(rows)` gives
+the column count that keeps the bird's proportions -- a terminal cell is about
+twice as tall as it is wide, so a picture that is square on screen is not square
+in cells, and that ratio is applied in exactly one place.
+
+Two things make shrinking work rather than turning the bird to mush.
+
+**More pixels per cell.** A cell can hold more than the two stacked pixels of a
+half block. Every set below is complete -- there is a glyph for every possible
+arrangement of lit subcells -- so the *shape* is always exact and only the colour
+is approximated, down to the two a cell can carry.
+
+| set | subcells | notes |
+|---|---|---|
+| half | 1x2 | universal |
+| quadrant | 2x2 | Unicode 1.1; universal in practice. The default. |
+| sextant | 2x3 | Unicode 13 (2020). Best small, needs a font that has them. |
+
+**A weighted vote.** When one subcell has to stand for several source pixels, a
+plain majority is the wrong rule: the eye gets outvoted by the face around it and
+the beak's ridge stripe gets outvoted by the beak, and what survives is a blob
+with a wedge on it. So roles carry weights, and the ones that carry the bird's
+identity shout louder than the ones that are merely large. That is the same
+judgement the art encodes -- keep the cap, the face, the banded beak, the feet --
+applied to sampling. The weights are in `puffin/resample.go` and they are the
+first thing to reach for if a feature disappears too early.
+
+It stays legible down to about eight rows on sextants. Below that it is a dark
+bird with an orange wedge, which is still more puffin than most things.
+
 ## Constraints worth knowing before you change something
 
-Scale is an integer and goes up only. Shrinking is not offered: at this size the
-beak *is* the bird, and dropping every other pixel is exactly the operation that
-removes it. A smaller puffin needs new art, not a resample.
+A cell holds two colours. Not three. Every part of the pipeline that looks
+clever is working around that one number.
 
 A cell holds two pixels stacked, drawn with a half-block. Which glyph a cell gets
 depends on which halves survive -- both opaque is the ordinary
@@ -142,8 +195,9 @@ of a rectangular halo, and it is the part to be careful with when editing
 | `scene/` | backdrop and placement, shared by the viewer and the renderers |
 | `cmd/auklet` | the viewer |
 | `cmd/gen-themes` | stylesheet to Go |
-| `cmd/shot` | renders one composed scene to stdout, no TTY needed |
+| `cmd/shot` | renders one composed screen to stdout, no TTY needed |
 | `cmd/dump` | one line per cell, for checking a render without parsing escapes |
+| `cmd/sizes` | dumps the sprite alone at a given glyph set and row count |
 
 Three of the seven themes exist to fail. `nord` is a real palette that misses the
 silhouette gate by three thousandths, `ansi16` demonstrates the unverifiable

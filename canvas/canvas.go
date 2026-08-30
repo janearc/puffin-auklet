@@ -140,8 +140,8 @@ func Render(rows [][]Cell) string {
 	return b.String()
 }
 
-// Fill2 fills a single row. useful for banded backdrops.
-func (c *Canvas) Fill2(y int, cell Cell) {
+// FillRow fills a single row. useful for banded backdrops.
+func (c *Canvas) FillRow(y int, cell Cell) {
 	if y < 0 || y >= c.h {
 		return
 	}
@@ -152,3 +152,26 @@ func (c *Canvas) Fill2(y int, cell Cell) {
 
 // Cells exposes the buffer for inspection and testing.
 func (c *Canvas) Cells() [][]Cell { return c.cells }
+
+// BlitCanvas composites another canvas at x,y with the same transparency rules
+// as Blit.
+func (c *Canvas) BlitCanvas(src *Canvas, x, y int) { c.Blit(src.cells, x, y) }
+
+// Box draws a single-line border enclosing the rectangle at x,y of size w by h.
+// the border sits OUTSIDE that rectangle, so pass the interior's geometry.
+func (c *Canvas) Box(x, y, w, h int, fg, bg lipgloss.TerminalColor) {
+	l, r := x-1, x+w
+	t, b := y-1, y+h
+	for i := 0; i < w; i++ {
+		c.Set(x+i, t, Cell{R: '─', FG: fg, BG: bg})
+		c.Set(x+i, b, Cell{R: '─', FG: fg, BG: bg})
+	}
+	for i := 0; i < h; i++ {
+		c.Set(l, y+i, Cell{R: '│', FG: fg, BG: bg})
+		c.Set(r, y+i, Cell{R: '│', FG: fg, BG: bg})
+	}
+	c.Set(l, t, Cell{R: '┌', FG: fg, BG: bg})
+	c.Set(r, t, Cell{R: '┐', FG: fg, BG: bg})
+	c.Set(l, b, Cell{R: '└', FG: fg, BG: bg})
+	c.Set(r, b, Cell{R: '┘', FG: fg, BG: bg})
+}
