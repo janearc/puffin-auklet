@@ -2,6 +2,8 @@
 // cutout transparency, a window to move it around in and out of, and the poses
 // it needs to present to camera.
 //
+//	-character NAME   start on this one; -character=list prints the roster
+//
 //	f                 cycle focus: auklet / window / view
 //	arrows, hjkl      move whatever has focus      shift+arrows  by 5
 //	+ / -             sprite size                  g             glyph set
@@ -17,6 +19,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -600,11 +603,44 @@ func defaultThemeIdx() []int {
 	return idx
 }
 
+// characterIndex resolves a name to its position in auklet.Characters(),
+// or exits with the roster if the name is not one of them -- the same
+// validate-and-list-what-is-registered shape the render CLI already uses,
+// so a typo says what IS available instead of just failing.
+func characterIndex(name string) int {
+	chars := auklet.Characters()
+	for i, c := range chars {
+		if c.Name == name {
+			return i
+		}
+	}
+	names := make([]string, len(chars))
+	for i, c := range chars {
+		names[i] = c.Name
+	}
+	fmt.Fprintf(os.Stderr, "unknown character %q; have %v\n", name, names)
+	os.Exit(2)
+	return 0
+}
+
 func main() {
+	character := flag.String("character", "auklet", "start on this one -- see -character=list for the roster")
+	flag.Parse()
+
+	if *character == "list" {
+		names := make([]string, len(auklet.Characters()))
+		for i, c := range auklet.Characters() {
+			names[i] = c.Name
+		}
+		fmt.Println(strings.Join(names, ", "))
+		return
+	}
+
 	p := tea.NewProgram(model{
 		glyphs: auklet.Quadrant, cutout: true, backdrop: 2, showVal: true,
 		animate: true, next: 20, roar: -1, watch: true,
-		themeIdx: defaultThemeIdx(),
+		character: characterIndex(*character),
+		themeIdx:  defaultThemeIdx(),
 	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
