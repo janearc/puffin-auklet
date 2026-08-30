@@ -24,6 +24,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/scene"
@@ -395,7 +396,13 @@ func (m model) View() string {
 			Render(strings.ReplaceAll(err.Error(), "\n", "  |  "))
 	}
 
-	return scene.Build(o).String() + "\n" + hud + "\n" + help
+	// every line is clipped to the terminal's width. reported from the puffin
+	// integration: a footer longer than the window silently sets the width of
+	// everything composed with it, and a 200-column terminal renders 251
+	// columns. the canvas cannot do this to us -- it is sized in cells -- but
+	// the HUD is a plain string and would.
+	fit := func(s string) string { return ansi.Truncate(s, m.w, "") }
+	return scene.Build(o).String() + "\n" + fit(hud) + "\n" + fit(help)
 }
 
 func clamp(v, lo, hi int) int {

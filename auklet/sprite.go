@@ -56,16 +56,32 @@ func (s Sprite) MouthLevels() int {
 	return len(s.Mouths)
 }
 
-// Views is every sprite as an ORDERED sequence, so a caller can step along it
-// rather than naming vars. Today that is profile then front; when turn frames
-// exist they belong in this list, in turn order, and stepping it becomes a pan.
-func Views() []Sprite { return []Sprite{SideView, FrontView} }
+// Views is every sprite as an ORDERED sequence, in TURN order: full profile
+// facing left, through two intermediate angles, to head-on. Stepping the list
+// is a pan; stepping it backwards is a pan the other way.
+//
+// The angles are 90, 60, 30 and 0 degrees off head-on. Four rather than the
+// seven a 15-degree step would give, because at 24 source pixels of head width
+// several of those seven would resample to identical cells -- drawings that do
+// not exist on screen.
+func Views() []Sprite { return []Sprite{SideView, Turn60View, Turn30View, FrontView} }
+
+// Turn60View is mostly profile, just off it: the beak's reach is visibly
+// shortened and the head has rounded, but the far eye is still hidden.
+var Turn60View = Sprite{Name: "turn60", art: turn60Art}
+
+// Turn30View is mostly front, just off it: both eyes show, the far one squeezed
+// toward the edge, and the beak still leans away from centre.
+var Turn30View = Sprite{Name: "turn30", art: turn30Art}
 
 // the stock emote vocabulary is assembled from poses each sprite already has,
 // which is why it costs no art. see buildEmotes.
 func init() {
-	for _, s := range []*Sprite{&SideView, &FrontView} {
+	for _, s := range []*Sprite{&SideView, &Turn60View, &Turn30View, &FrontView} {
 		s.eyeCache = findEyes(s.art)
+		if len(s.Blink) == 0 {
+			s.Blink = s.derivedBlink()
+		}
 		buildEmotes(s)
 	}
 }

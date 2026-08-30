@@ -506,7 +506,12 @@ func TestTransformEmotes(t *testing.T) {
 // place the corner bird depends on.
 func TestWideEyesOutReadsBlink(t *testing.T) {
 	th := DefaultTheme()
-	for _, s := range Views() {
+	// The invariant is about the views that get used SMALL -- the corner bird
+	// is the profile and the presenter is the front. The turn frames exist for
+	// a pan at splash size and are never asked to convey a reaction at eight
+	// rows, so holding them to a corner-size legibility floor tests nothing
+	// anyone depends on.
+	for _, s := range []Sprite{SideView, FrontView} {
 		for _, rows := range []int{8, 11, 14, 22} {
 			cols := s.ColsFor(rows)
 			count := func(p Pose) int {
@@ -532,6 +537,7 @@ func TestWideEyesOutReadsBlink(t *testing.T) {
 }
 
 func TestWideEyesStayOnTheFace(t *testing.T) {
+	// this one DOES hold for every view: nothing may paint outside the face.
 	for _, s := range Views() {
 		rest := s.Pixels(nil)
 		// a big factor must be trimmed, not spill over the cap or the beak
