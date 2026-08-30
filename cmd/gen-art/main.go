@@ -143,11 +143,16 @@ func emit(path, varName, note string, rows []string, dx, dy int) error {
 	return os.WriteFile(path, src, 0o644)
 }
 
+// a job renders one drawing and writes it as generated Go source. Declared
+// here rather than inside main so gopherJobs (cmd/gen-art/gopher.go) can
+// build the same shape without main.go knowing the gopher exists beyond one
+// append call.
+type job struct {
+	path, varName, note string
+	draw                func() *drawing
+}
+
 func main() {
-	type job struct {
-		path, varName, note string
-		draw                func() *drawing
-	}
 	jobs := []job{
 		{"auklet/side_art.go", "sideArt",
 			"The bird in profile: the classic silhouette, and the view that reads at the smallest sizes because the beak is doing all the work.",
@@ -162,6 +167,8 @@ func main() {
 			"The bird head-on. The beak is laterally flattened, so from the front it is a narrow blade rather than the profile's wedge -- what carries the read instead is the symmetry.",
 			drawFront},
 	}
+	jobs = append(jobs, gopherJobs()...)
+	jobs = append(jobs, lampJobs()...)
 	for _, j := range jobs {
 		rows, dx, dy := j.draw().trim()
 		if err := emit(j.path, j.varName, j.note, rows, dx, dy); err != nil {

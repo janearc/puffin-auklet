@@ -1,4 +1,8 @@
-// render writes a narrating auklet out as frames.
+// render writes a narrating auklet out as frames -- and, with -emote or
+// -pose, a scripted performance instead of or alongside the narration. This
+// is the thing to reach for driving a take from the command line: no
+// terminal to sit in front of, no keys to press, just flags that pick a
+// character, a performance and an output format.
 //
 // three formats, and the default is the one that keeps the bird made of
 // terminal cells:
@@ -9,10 +13,17 @@
 //	ansi   one .ans file per frame, if you would rather drive the timing
 //	       yourself.
 //	png    pixel frames with a real alpha channel, for compositing the bird
-//	       over footage as an image rather than as text.
+//	       over footage as an image rather than as text. the only format
+//	       where an emote's Transform.Scale actually changes anything --
+//	       cast and ansi are one fixed cell grid for the whole recording,
+//	       the way a real terminal is, so a "walk-in" still waves, it just
+//	       does not grow.
 //
 //	go run ./cmd/render -text "hello. i am a auklet." -out auklet.cast
 //	go run ./cmd/render -format png -still -scale 16 -out .
+//	go run ./cmd/render -character gopher -emote walk-in -format png -out frames/
+//	go run ./cmd/render -character gopher -pose astronaut -text "..." -out take.cast
+//	go run ./cmd/render -character gopher -list
 //
 // in cast and ansi the background is simply never set, so the terminal's own
 // background shows through and the bird composites onto whatever is behind it.
@@ -40,10 +51,19 @@ import (
 	"github.com/janearc/puffin-auklet/themes"
 )
 
+// builtFrame is a resolved pose plus the scale factor an emote's Transform
+// asked for. Only the png path uses scale -- see the package doc for why
+// cast and ansi cannot.
+type builtFrame struct {
+	pose  auklet.Pose
+	scale float64
+}
+
 func main() {
 	var (
-		themeName = flag.String("theme", "corvid", "dodo theme name")
-		viewName  = flag.String("view", "front", "side or front")
+		themeName = flag.String("theme", "corvid", "theme name, from themes.All")
+		character = flag.String("character", "auklet", "auklet or gopher")
+		viewName  = flag.String("view", "front", "side, turn60, turn30 or front")
 		format    = flag.String("format", "cast", "cast, ansi or png")
 		rows      = flag.Int("rows", 22, "sprite height in terminal cells (cast, ansi)")
 		glyphs    = flag.String("glyphs", "quadrant", "half, quadrant or sextant (cast, ansi)")
@@ -55,15 +75,26 @@ func main() {
 		opaque    = flag.Bool("opaque", false, "fill the background instead of leaving it transparent")
 		blink     = flag.Bool("blink", true, "blink on an idle timer")
 		seed      = flag.Int64("seed", 1, "blink timing seed; same seed, same take")
+		emoteName = flag.String("emote", "", "play a named emote (see -list) instead of idle narration timing")
+		poseName  = flag.String("pose", "", "hold a named pose for every frame -- composes with -text and -emote")
+		repeat    = flag.Int("repeat", 1, "how many times to loop a looping -emote; ignored otherwise")
+		list      = flag.Bool("list", false, "print this character/view's emotes and poses, then exit")
 	)
 	flag.Parse()
 
-	vars, ok := themes.Dodo[*themeName]
-	if !ok {
-		fmt.Fprintf(os.Stderr, "unknown theme %q; have %v\n", *themeName, themes.DodoOrder)
+	var theme auklet.Theme
+	var themeNames []string
+	themeFound := false
+	for _, n := range themes.All {
+		themeNames = append(themeNames, n.Name)
+		if n.Name == *themeName {
+			theme, themeFound = n.Theme, true
+		}
+	}
+	if !themeFound {
+		fmt.Fprintf(os.Stderr, "unknown theme %q; have %v\n", *themeName, themeNames)
 		os.Exit(2)
 	}
-	theme := vars.Auklet()
 	if err := theme.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "theme %s does not validate:\n%v\n", *themeName, err)
 		os.Exit(1)
@@ -72,8 +103,21 @@ func main() {
 		theme.Background = nil
 	}
 
+	var views []auklet.Sprite
+	var charNames []string
+	for _, cs := range auklet.Characters() {
+		charNames = append(charNames, cs.Name)
+		if cs.Name == *character {
+			views = cs.Views
+		}
+	}
+	if views == nil {
+		fmt.Fprintf(os.Stderr, "unknown character %q; have %v\n", *character, charNames)
+		os.Exit(2)
+	}
+
 	var sprite auklet.Sprite
-	for _, s := range auklet.Views() {
+	for _, s := range views {
 		if s.Name == *viewName {
 			sprite = s
 		}
@@ -81,6 +125,12 @@ func main() {
 	if sprite.Name == "" {
 		fmt.Fprintf(os.Stderr, "unknown view %q\n", *viewName)
 		os.Exit(2)
+	}
+
+	if *list {
+		fmt.Printf("%s/%s emotes: %v\n", *character, sprite.Name, sprite.Emotes())
+		fmt.Printf("%s/%s poses:  %v\n", *character, sprite.Name, sprite.PoseNames())
+		return
 	}
 
 	gs := auklet.Quadrant
@@ -95,29 +145,75 @@ func main() {
 		os.Exit(2)
 	}
 
-	track := []int{0}
-	if !*still {
-		track = auklet.MouthTrack(*text, *fps)
+	var staticPose auklet.Pose
+	if *poseName != "" {
+		p, ok := sprite.NamedPose(*poseName)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown pose %q for %s/%s; have %v\n",
+				*poseName, *character, sprite.Name, sprite.PoseNames())
+			os.Exit(2)
+		}
+		staticPose = p
 	}
 
-	rng := rand.New(rand.NewSource(*seed))
-	nextBlink, blinkFor := 20+rng.Intn(30), 0
-
-	poses := make([]auklet.Pose, len(track))
-	for i, level := range track {
-		p := append(auklet.Pose{}, sprite.Mouth(level)...)
-		if *blink && !*still {
-			switch {
-			case blinkFor > 0:
-				blinkFor--
-				p = append(p, sprite.Blink...)
-			case i >= nextBlink:
-				blinkFor = *fps / 8
-				nextBlink = i + *fps*2 + rng.Intn(*fps*3)
-				p = append(p, sprite.Blink...)
-			}
+	var frames []builtFrame
+	switch {
+	case *emoteName != "":
+		em, ok := sprite.Emote(*emoteName)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown emote %q for %s/%s; have %v\n",
+				*emoteName, *character, sprite.Name, sprite.Emotes())
+			os.Exit(2)
 		}
-		poses[i] = p
+		reps := *repeat
+		if reps < 1 {
+			reps = 1
+		}
+		if !em.Loop {
+			reps = 1 // a one-shot emote does not get more meaningful by repeating
+		}
+		step := time.Second / time.Duration(*fps)
+		total := em.Length() * time.Duration(reps)
+		for t := time.Duration(0); t < total; t += step {
+			fr, ok := em.At(t % em.Length())
+			if !ok {
+				break
+			}
+			p := append(append(auklet.Pose{}, fr.Pose...), staticPose...)
+			frames = append(frames, builtFrame{pose: p, scale: fr.Transform.Factor()})
+		}
+		if len(frames) == 0 {
+			fail(fmt.Errorf("emote %q produced no frames at %d fps", *emoteName, *fps))
+		}
+
+	default:
+		track := []int{0}
+		if !*still {
+			track = auklet.MouthTrack(*text, *fps)
+		}
+		rng := rand.New(rand.NewSource(*seed))
+		nextBlink, blinkFor := 20+rng.Intn(30), 0
+		for i, level := range track {
+			p := append(auklet.Pose{}, sprite.Mouth(level)...)
+			if *blink && !*still {
+				switch {
+				case blinkFor > 0:
+					blinkFor--
+					p = append(p, sprite.Blink...)
+				case i >= nextBlink:
+					blinkFor = *fps / 8
+					nextBlink = i + *fps*2 + rng.Intn(*fps*3)
+					p = append(p, sprite.Blink...)
+				}
+			}
+			p = append(p, staticPose...)
+			frames = append(frames, builtFrame{pose: p, scale: 1})
+		}
+	}
+
+	poses := make([]auklet.Pose, len(frames))
+	for i, f := range frames {
+		poses[i] = f.pose
 	}
 
 	switch *format {
@@ -149,7 +245,7 @@ func main() {
 		if err := os.MkdirAll(*out, 0o755); err != nil {
 			fail(err)
 		}
-		for i, p := range poses {
+		for i, fr := range frames {
 			name := filepath.Join(*out, fmt.Sprintf("auklet_%05d.png", i))
 			if *still {
 				name = filepath.Join(*out, "auklet.png")
@@ -158,7 +254,15 @@ func main() {
 			if err != nil {
 				fail(err)
 			}
-			if err := png.Encode(f, frame(sprite, theme, p, *scale)); err != nil {
+			// Transform.Scale is "closer/further" on a sprite that only
+			// ever resamples to a chosen size -- so it becomes the pixel
+			// scale, frame by frame, rather than anything the sprite itself
+			// has an opinion about.
+			frameScale := int(float64(*scale)*fr.scale + 0.5)
+			if frameScale < 1 {
+				frameScale = 1
+			}
+			if err := png.Encode(f, frame(sprite, theme, fr.pose, frameScale)); err != nil {
 				f.Close()
 				fail(err)
 			}
