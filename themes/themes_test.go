@@ -9,7 +9,7 @@ import (
 // theme change in dodo silently breaking the sprite.
 func TestDodoThemesValidate(t *testing.T) {
 	for _, name := range DodoOrder {
-		if err := Dodo[name].Puffin().Validate(); err != nil {
+		if err := Dodo[name].Auklet().Validate(); err != nil {
 			t.Errorf("%s:\n  %s", name, strings.ReplaceAll(err.Error(), "\n", "\n  "))
 		}
 	}

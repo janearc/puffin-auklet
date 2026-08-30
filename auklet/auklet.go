@@ -1,12 +1,11 @@
-// package puffin renders an atlantic puffin as terminal half-blocks.
+// The side view's stencil, the Theme its roles are painted with, and the
+// validator that keeps a theme legible. See doc.go for the package overview.
 //
-// the art is a fixed 39x44 pixel grid. two pixel rows share one terminal cell
-// via the upper-half-block glyph, so a cell is roughly square and the bird is
-// 39 columns by 22 rows on screen.
-//
-// colours are supplied by the caller as a Theme of named roles. the art itself
-// never names a colour, so retheming is a struct, not a redraw.
-package puffin
+// The art is a fixed 39x44 pixel grid of role codes. Colours are supplied by
+// the caller; the art itself never names one, so retheming is a struct rather
+// than a redraw.
+
+package auklet
 
 import (
 	"errors"
@@ -19,7 +18,7 @@ import (
 	"github.com/janearc/puffin-auklet/canvas"
 )
 
-// Width and Height are the widget's terminal footprint, in cells.
+// Width and Height are the side view's footprint at native size, in cells.
 const (
 	Width  = 39
 	Height = 22
@@ -103,54 +102,6 @@ func (t Theme) colorFor(c byte) lipgloss.TerminalColor {
 	}
 }
 
-// '.' is transparent and takes the theme's Background.
-var art = []string{
-	"....................KKKKKK.............",
-	".................KKKKKKKKKKKK..........",
-	"................KKKKKKKKKKKKKK.........",
-	"...............KKKKKKKKKKKKKKKK........",
-	".............BBBKKKKKKKKKKKKKKKK.......",
-	"...........BBBBBWWWWWWWWWKKKKKKKK......",
-	"..........YBBBBBWWWWWWWWWWKKKKKKK......",
-	"........RYYBBBBBBWDDDDWWWWWKKKKKKK.....",
-	".......RRYYBBBBBBWXEEXWWWWWKKKKKKK.....",
-	"......RRRYYBBBBBBWEEEEWWWWWWKKKKKK.....",
-	".....RRRRYYBBBBBBWXEEXWDDDWWKKKKKK.....",
-	"....RRRRRYYBBBBBBWWXXWWWWWDDKKKKKK.....",
-	"...RRRRRRRYYBBBBBWWWWWWWWWWWKKKKKK.....",
-	"..RRRRRRRRYYBBBBBWWWWWWWWWWWKKKKKK.....",
-	"..RRRRRRRRYYBBBBBWWWWWWWWWWKKKKKKK.....",
-	".RRRRRRRRRYYBBBBBWWWWWWWWWWKKKKKK......",
-	".RRRRRRRRRYYBBBBBWWWWWWWWWKKKKKKK......",
-	"RRRRRRRRRRYYBBBBWWWWWWWWWKKKKKKKK......",
-	".YRRRRRRRRRYYBBBWWWWWWWWKKKKKKKKKK.....",
-	"..YYRRRRRRRYYBBBKKKWKKKKKKKKKKKVVVVK...",
-	"....YYRRRRRYYBBYKKKKKKKKKKKKKKVVVVVVK..",
-	"......YYYRRYYBBKKKKKKKKKKKKKKKVVVVVVK..",
-	".........YYYYBBKKKKKKKKKKKKKKVVVVVVVVK.",
-	"...........KYYYKKKKKKKKKKKKKKVVVVVVVVKK",
-	"...........KKKKKKKKKKKKKKKKKKVVVVVVVVKK",
-	"...........KKWWWWWWWWWWWWWWWWWWWVVVVVKK",
-	"...........KWWWWWWWWWWWWWWWWWWWWWVVVVKK",
-	"...........KWWWWWWWWWWWWWWWWWWWWWVVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVKKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVKKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVKKKK",
-	"............WWWWWWWWWWWWWWWWWWWWWWKKKK.",
-	".............WWWWWWWWWWWWWWWWWWWWKKKK..",
-	".............WWWWWWWWWWWWWWWWWWWWKKKK..",
-	"..............WWWWWWWWWWWWWWWWWWKKKK...",
-	"................WWWWWWWWWWWWWWWKKK.....",
-	".................WWWOOWWWWWWWOOKK......",
-	"...................WOOWWWWWWWOO........",
-	"....................OO.......OO........",
-	".................OOOOOOOOOOOOOOOOOO....",
-	"..................OOOOOOO..OOOOOOO.....",
-	".......................................",
-}
-
 // SizeAt reports the widget's footprint in cells at a given integer scale.
 func SizeAt(scale int) (w, h int) {
 	if scale < 1 {
@@ -159,42 +110,14 @@ func SizeAt(scale int) (w, h int) {
 	return Width * scale, Height * scale
 }
 
-// Cells returns the sprite as a cell grid, nearest-neighbour scaled by an
-// integer factor, ready for canvas.Blit.
-//
-// two pixel rows share one cell via a half-block. which glyph a cell gets
-// depends on which of its two halves survive: both opaque is the usual
-// foreground-over-background pair, one opaque flips to whichever half-block
-// puts the colour on the right side, and neither leaves the cell empty. that
-// is what lets a cutout keep a clean edge instead of a rectangular halo.
-//
-// scale is integer and upward only. shrinking is not offered: at this size the
-// beak is the bird, and dropping every other pixel is exactly what removes it.
-// a smaller puffin needs new art, not a resample.
+// Cells returns the sprite at an integer scale using half blocks. it is a
+// thin wrapper on CellsAt, kept because scale 1 is the art's native size and
+// most callers want exactly that.
 func Cells(t Theme, scale int) [][]canvas.Cell {
 	if scale < 1 {
 		scale = 1
 	}
-	pw, ph := len(art[0])*scale, len(art)*scale
-	rows := make([][]canvas.Cell, ph/2)
-	for cy := range rows {
-		rows[cy] = make([]canvas.Cell, pw)
-		for x := 0; x < pw; x++ {
-			top := t.colorFor(art[(cy*2)/scale][x/scale])
-			bot := t.colorFor(art[(cy*2+1)/scale][x/scale])
-			switch {
-			case top == nil && bot == nil:
-				rows[cy][x] = canvas.Cell{}
-			case bot == nil:
-				rows[cy][x] = canvas.Cell{R: '▀', FG: top}
-			case top == nil:
-				rows[cy][x] = canvas.Cell{R: '▄', FG: bot}
-			default:
-				rows[cy][x] = canvas.Cell{R: '▀', FG: top, BG: bot}
-			}
-		}
-	}
-	return rows
+	return CellsAt(t, Half, Width*scale, Height*scale)
 }
 
 // Render returns the puffin as a printable string at scale 1, Height lines
@@ -307,7 +230,7 @@ type pair struct {
 
 // Validate reports every role pair that has collapsed, all at once. a theme
 // that fails this still renders; it just renders something that is not
-// identifiably a puffin.
+// identifiably a auklet.
 func (t Theme) Validate() error {
 	var errs []error
 
@@ -395,4 +318,20 @@ func Luminance(c lipgloss.TerminalColor) (float64, bool) {
 		return 0, false
 	}
 	return lum(vs[len(vs)-1]), true
+}
+
+// RoleColor maps one role byte to its colour under this theme. '.' and any
+// unknown byte return Background, which may be nil for a cutout.
+func (t Theme) RoleColor(role byte) lipgloss.TerminalColor { return t.colorFor(role) }
+
+// RGB resolves a colour to eight-bit components. it reads the declared value
+// rather than asking the renderer, for the same reason Validate does: the
+// renderer's answer depends on a terminal that an image encoder does not have.
+func RGB(c lipgloss.TerminalColor) (r, g, b uint8, ok bool) {
+	vs, ok := resolve(c)
+	if !ok || len(vs) == 0 {
+		return 0, 0, 0, false
+	}
+	v := vs[len(vs)-1]
+	return uint8(v.r*255 + 0.5), uint8(v.g*255 + 0.5), uint8(v.b*255 + 0.5), true
 }

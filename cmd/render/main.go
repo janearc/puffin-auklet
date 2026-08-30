@@ -1,0 +1,366 @@
+// render writes a narrating auklet out as frames -- and, with -emote or
+// -pose, a scripted performance instead of or alongside the narration. This
+// is the thing to reach for driving a take from the command line: no
+// terminal to sit in front of, no keys to press, just flags that pick a
+// character, a performance and an output format.
+//
+// three formats, and the default is the one that keeps the bird made of
+// terminal cells:
+//
+//	cast   an asciicast v2 recording. one file, plays in a terminal, and the
+//	       existing tools turn it into a gif or an mp4. this is the one you
+//	       want for a video about terminal software.
+//	ansi   one .ans file per frame, if you would rather drive the timing
+//	       yourself.
+//	png    pixel frames with a real alpha channel, for compositing the bird
+//	       over footage as an image rather than as text. the only format
+//	       where an emote's Transform.Scale actually changes anything --
+//	       cast and ansi are one fixed cell grid for the whole recording,
+//	       the way a real terminal is, so a "walk-in" still waves, it just
+//	       does not grow.
+//
+//	go run ./cmd/render -text "hello. i am a auklet." -out auklet.cast
+//	go run ./cmd/render -format png -still -scale 16 -out .
+//	go run ./cmd/render -character gopher -emote walk-in -format png -out frames/
+//	go run ./cmd/render -character gopher -pose astronaut -text "..." -out take.cast
+//	go run ./cmd/render -character gopher -list
+//
+// in cast and ansi the background is simply never set, so the terminal's own
+// background shows through and the bird composites onto whatever is behind it.
+// in png that same transparency becomes alpha 0 -- no key to pull, no fringe.
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
+	"github.com/janearc/puffin-auklet/auklet"
+	"github.com/janearc/puffin-auklet/canvas"
+	"github.com/janearc/puffin-auklet/themes"
+)
+
+// builtFrame is a resolved pose plus the scale factor an emote's Transform
+// asked for. Only the png path uses scale -- see the package doc for why
+// cast and ansi cannot.
+type builtFrame struct {
+	pose  auklet.Pose
+	scale float64
+}
+
+func main() {
+	var (
+		themeName = flag.String("theme", "corvid", "theme name, from themes.All")
+		character = flag.String("character", "auklet", "auklet or gopher")
+		viewName  = flag.String("view", "front", "side, turn60, turn30 or front")
+		format    = flag.String("format", "cast", "cast, ansi or png")
+		rows      = flag.Int("rows", 22, "sprite height in terminal cells (cast, ansi)")
+		glyphs    = flag.String("glyphs", "quadrant", "half, quadrant or sextant (cast, ansi)")
+		scale     = flag.Int("scale", 12, "pixels per source pixel (png only)")
+		text      = flag.String("text", "hello. i am a puffin, and i will be narrating this software.", "narration")
+		fps       = flag.Int("fps", 24, "frames per second")
+		out       = flag.String("out", "auklet.cast", "output file, or directory for ansi and png")
+		still     = flag.Bool("still", false, "write one frame with the beak shut")
+		opaque    = flag.Bool("opaque", false, "fill the background instead of leaving it transparent")
+		blink     = flag.Bool("blink", true, "blink on an idle timer")
+		seed      = flag.Int64("seed", 1, "blink timing seed; same seed, same take")
+		emoteName = flag.String("emote", "", "play a named emote (see -list) instead of idle narration timing")
+		poseName  = flag.String("pose", "", "hold a named pose for every frame -- composes with -text and -emote")
+		repeat    = flag.Int("repeat", 1, "how many times to loop a looping -emote; ignored otherwise")
+		list      = flag.Bool("list", false, "print this character/view's emotes and poses, then exit")
+	)
+	flag.Parse()
+
+	var theme auklet.Theme
+	var themeNames []string
+	themeFound := false
+	for _, n := range themes.All {
+		themeNames = append(themeNames, n.Name)
+		if n.Name == *themeName {
+			theme, themeFound = n.Theme, true
+		}
+	}
+	if !themeFound {
+		fmt.Fprintf(os.Stderr, "unknown theme %q; have %v\n", *themeName, themeNames)
+		os.Exit(2)
+	}
+	if err := theme.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "theme %s does not validate:\n%v\n", *themeName, err)
+		os.Exit(1)
+	}
+	if !*opaque {
+		theme.Background = nil
+	}
+
+	var views []auklet.Sprite
+	var charNames []string
+	for _, cs := range auklet.Characters() {
+		charNames = append(charNames, cs.Name)
+		if cs.Name == *character {
+			views = cs.Views
+		}
+	}
+	if views == nil {
+		fmt.Fprintf(os.Stderr, "unknown character %q; have %v\n", *character, charNames)
+		os.Exit(2)
+	}
+
+	var sprite auklet.Sprite
+	for _, s := range views {
+		if s.Name == *viewName {
+			sprite = s
+		}
+	}
+	if sprite.Name == "" {
+		fmt.Fprintf(os.Stderr, "unknown view %q\n", *viewName)
+		os.Exit(2)
+	}
+
+	if *list {
+		fmt.Printf("%s/%s emotes: %v\n", *character, sprite.Name, sprite.Emotes())
+		fmt.Printf("%s/%s poses:  %v\n", *character, sprite.Name, sprite.PoseNames())
+		return
+	}
+
+	gs := auklet.Quadrant
+	switch *glyphs {
+	case "half":
+		gs = auklet.Half
+	case "sextant":
+		gs = auklet.Sextant
+	case "quadrant":
+	default:
+		fmt.Fprintf(os.Stderr, "unknown glyph set %q\n", *glyphs)
+		os.Exit(2)
+	}
+
+	var staticPose auklet.Pose
+	if *poseName != "" {
+		p, ok := sprite.NamedPose(*poseName)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown pose %q for %s/%s; have %v\n",
+				*poseName, *character, sprite.Name, sprite.PoseNames())
+			os.Exit(2)
+		}
+		staticPose = p
+	}
+
+	var frames []builtFrame
+	switch {
+	case *emoteName != "":
+		em, ok := sprite.Emote(*emoteName)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "unknown emote %q for %s/%s; have %v\n",
+				*emoteName, *character, sprite.Name, sprite.Emotes())
+			os.Exit(2)
+		}
+		reps := *repeat
+		if reps < 1 {
+			reps = 1
+		}
+		if !em.Loop {
+			reps = 1 // a one-shot emote does not get more meaningful by repeating
+		}
+		step := time.Second / time.Duration(*fps)
+		total := em.Length() * time.Duration(reps)
+		for t := time.Duration(0); t < total; t += step {
+			fr, ok := em.At(t % em.Length())
+			if !ok {
+				break
+			}
+			p := append(append(auklet.Pose{}, fr.Pose...), staticPose...)
+			frames = append(frames, builtFrame{pose: p, scale: fr.Transform.Factor()})
+		}
+		if len(frames) == 0 {
+			fail(fmt.Errorf("emote %q produced no frames at %d fps", *emoteName, *fps))
+		}
+
+	default:
+		track := []int{0}
+		if !*still {
+			track = auklet.MouthTrack(*text, *fps)
+		}
+		rng := rand.New(rand.NewSource(*seed))
+		nextBlink, blinkFor := 20+rng.Intn(30), 0
+		for i, level := range track {
+			p := append(auklet.Pose{}, sprite.Mouth(level)...)
+			if *blink && !*still {
+				switch {
+				case blinkFor > 0:
+					blinkFor--
+					p = append(p, sprite.Blink...)
+				case i >= nextBlink:
+					blinkFor = *fps / 8
+					nextBlink = i + *fps*2 + rng.Intn(*fps*3)
+					p = append(p, sprite.Blink...)
+				}
+			}
+			p = append(p, staticPose...)
+			frames = append(frames, builtFrame{pose: p, scale: 1})
+		}
+	}
+
+	poses := make([]auklet.Pose, len(frames))
+	for i, f := range frames {
+		poses[i] = f.pose
+	}
+
+	switch *format {
+	case "cast":
+		if err := writeCast(*out, sprite, theme, gs, *rows, poses, *fps); err != nil {
+			fail(err)
+		}
+		fmt.Printf("%d frames, %dx%d cells, %s/%s/%s -> %s\n",
+			len(poses), sprite.ColsFor(*rows), *rows, *themeName, sprite.Name, gs, *out)
+
+	case "ansi":
+		if err := os.MkdirAll(*out, 0o755); err != nil {
+			fail(err)
+		}
+		for i, p := range poses {
+			cells := sprite.CellsAt(theme, gs, sprite.ColsFor(*rows), *rows, p)
+			name := filepath.Join(*out, fmt.Sprintf("auklet_%05d.ans", i))
+			if *still {
+				name = filepath.Join(*out, "auklet.ans")
+			}
+			if err := os.WriteFile(name, []byte(canvas.Render(cells)+"\n"), 0o644); err != nil {
+				fail(err)
+			}
+		}
+		fmt.Printf("%d frames, %dx%d cells, %s/%s/%s -> %s\n",
+			len(poses), sprite.ColsFor(*rows), *rows, *themeName, sprite.Name, gs, *out)
+
+	case "png":
+		if err := os.MkdirAll(*out, 0o755); err != nil {
+			fail(err)
+		}
+		for i, fr := range frames {
+			name := filepath.Join(*out, fmt.Sprintf("auklet_%05d.png", i))
+			if *still {
+				name = filepath.Join(*out, "auklet.png")
+			}
+			f, err := os.Create(name)
+			if err != nil {
+				fail(err)
+			}
+			// Transform.Scale is "closer/further" on a sprite that only
+			// ever resamples to a chosen size -- so it becomes the pixel
+			// scale, frame by frame, rather than anything the sprite itself
+			// has an opinion about.
+			frameScale := int(float64(*scale)*fr.scale + 0.5)
+			if frameScale < 1 {
+				frameScale = 1
+			}
+			if err := png.Encode(f, frame(sprite, theme, fr.pose, frameScale)); err != nil {
+				f.Close()
+				fail(err)
+			}
+			f.Close()
+		}
+		w, h := sprite.Size()
+		fmt.Printf("%d frames, %dx%d px, %s/%s, alpha=%v -> %s\n",
+			len(poses), w**scale, h**scale, *themeName, sprite.Name, !*opaque, *out)
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown format %q; want cast, ansi or png\n", *format)
+		os.Exit(2)
+	}
+}
+
+func fail(err error) {
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}
+
+// writeCast emits asciicast v2: a JSON header, then one [time, "o", data] event
+// per frame. each frame homes the cursor and repaints rather than clearing, so
+// a player never shows a blank screen between frames.
+func writeCast(path string, s auklet.Sprite, t auklet.Theme, gs auklet.GlyphSet,
+	rows int, poses []auklet.Pose, fps int) error {
+
+	// a file is not a terminal, so nothing will infer truecolor for us
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
+	cols := s.ColsFor(rows)
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	header := map[string]any{
+		"version":   2,
+		"width":     cols,
+		"height":    rows,
+		"timestamp": time.Now().Unix(),
+		"env":       map[string]string{"TERM": "xterm-256color"},
+	}
+	h, err := json.Marshal(header)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(f, "%s\n", h); err != nil {
+		return err
+	}
+
+	for i, p := range poses {
+		cells := s.CellsAt(t, gs, cols, rows, p)
+		body := strings.ReplaceAll(canvas.Render(cells), "\n", "\r\n")
+
+		data := "\u001b[H" + body
+		if i == 0 {
+			data = "\u001b[2J\u001b[?25l" + data // clear once, and hide the cursor
+		}
+
+		ev, err := json.Marshal([]any{float64(i) / float64(fps), "o", data})
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(f, "%s\n", ev); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// frame draws one posed bird. every source pixel becomes a scale x scale block:
+// nearest neighbour on purpose, because this is pixel art and smoothing it is
+// the one thing that would make it look worse.
+func frame(s auklet.Sprite, t auklet.Theme, pose auklet.Pose, scale int) image.Image {
+	rows := s.Pixels(pose)
+	w, h := len(rows[0])*scale, len(rows)*scale
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+
+	// role colours are fixed for the whole frame; resolve once
+	cache := map[byte]color.RGBA{}
+	lookup := func(role byte) color.RGBA {
+		if c, ok := cache[role]; ok {
+			return c
+		}
+		var out color.RGBA
+		if r, g, b, ok := auklet.RGB(t.RoleColor(role)); ok {
+			out = color.RGBA{r, g, b, 255}
+		}
+		cache[role] = out
+		return out
+	}
+
+	for y := 0; y < h; y++ {
+		src := rows[y/scale]
+		for x := 0; x < w; x++ {
+			img.Set(x, y, lookup(src[x/scale]))
+		}
+	}
+	return img
+}

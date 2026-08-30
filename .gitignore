@@ -1,1 +1,10 @@
-/auklet
+# built binaries
+/bin/
+/gen-art
+/bandersnatch
+
+# render output
+/frames/
+*.cast
+*.ans
+*.png
