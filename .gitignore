@@ -1,7 +1,6 @@
 # built binaries
 /bin/
 /gen-art
-/auklet
 /bandersnatch
 
 # render output
