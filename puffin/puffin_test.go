@@ -48,3 +48,43 @@ func TestDefaultThemeValidates(t *testing.T) {
 		t.Errorf("default theme must pass its own gate: %v", err)
 	}
 }
+
+func TestPoseDoesNotMutateBase(t *testing.T) {
+	before := make([]string, len(art))
+	copy(before, art)
+
+	th := DefaultTheme()
+	CellsPosed(th, Quadrant, ColsFor(12), 12, Pose{Blink})
+
+	for i := range art {
+		if art[i] != before[i] {
+			t.Fatalf("row %d of the base art changed after posing:\n  was %s\n  now %s",
+				i, before[i], art[i])
+		}
+	}
+}
+
+func TestBlinkClosesTheEye(t *testing.T) {
+	th := DefaultTheme()
+	countPupil := func(pose Pose) int {
+		grid := CellsPosed(th, Half, Width, Height, pose)
+		n := 0
+		for _, row := range grid {
+			for _, c := range row {
+				if c.FG == th.Pupil || c.BG == th.Pupil {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	open := countPupil(nil)
+	shut := countPupil(Pose{Blink})
+	if open == 0 {
+		t.Fatal("the open-eyed bird has no pupil")
+	}
+	if shut >= open {
+		t.Errorf("blink left %d pupil cells, open-eyed has %d; the lid is not closing",
+			shut, open)
+	}
+}

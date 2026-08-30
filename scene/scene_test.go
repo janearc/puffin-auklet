@@ -107,7 +107,7 @@ func TestSpriteSurvivesLeavingTheView(t *testing.T) {
 
 	before := o
 	Build(o)
-	if o != before {
+	if o.SpriteX != before.SpriteX || o.SpriteY != before.SpriteY || o.Win != before.Win {
 		t.Error("Build mutated its options")
 	}
 

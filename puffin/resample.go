@@ -65,15 +65,21 @@ func RowsToFit(maxCols, maxRows int) int {
 // set here is complete, the shape is always exact and only the colour is
 // approximated.
 func CellsAt(t Theme, gs GlyphSet, cols, rows int) [][]canvas.Cell {
+	return CellsPosed(t, gs, cols, rows, nil)
+}
+
+// CellsPosed is CellsAt with a pose stamped in first.
+func CellsPosed(t Theme, gs GlyphSet, cols, rows int, pose Pose) [][]canvas.Cell {
 	if cols < 1 {
 		cols = 1
 	}
 	if rows < 1 {
 		rows = 1
 	}
+	src := pose.apply()
 	cw, ch := gs.Dims()
 	subW, subH := cols*cw, rows*ch
-	srcW, srcH := SourceSize()
+	srcW, srcH := len(src[0]), len(src)
 
 	// resample: each subcell takes the loudest role in the source rectangle
 	// it covers. at scale 1 with half blocks this is an exact 1:1 copy.
@@ -89,7 +95,7 @@ func CellsAt(t Theme, gs GlyphSet, cols, rows int) [][]canvas.Cell {
 			if x1 <= x0 {
 				x1 = x0 + 1
 			}
-			sub[sy][sx] = loudest(x0, y0, x1, y1)
+			sub[sy][sx] = loudest(src, x0, y0, x1, y1)
 		}
 	}
 
@@ -103,14 +109,14 @@ func CellsAt(t Theme, gs GlyphSet, cols, rows int) [][]canvas.Cell {
 	return out
 }
 
-func loudest(x0, y0, x1, y1 int) byte {
+func loudest(src []string, x0, y0, x1, y1 int) byte {
 	var best byte
 	var bestW float64 = -1
 	seen := map[byte]float64{}
 	order := make([]byte, 0, 8)
-	for y := y0; y < y1 && y < len(art); y++ {
-		for x := x0; x < x1 && x < len(art[y]); x++ {
-			r := art[y][x]
+	for y := y0; y < y1 && y < len(src); y++ {
+		for x := x0; x < x1 && x < len(src[y]); x++ {
+			r := src[y][x]
 			if _, ok := seen[r]; !ok {
 				order = append(order, r)
 			}

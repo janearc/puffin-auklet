@@ -1,7 +1,7 @@
 // sizes dumps the sprite alone at a given glyph set and row count, one line
 // per cell, for offline inspection.
 //
-//	go run ./cmd/sizes <themeIdx> <glyphset 0=half 1=quad 2=sextant> <rows>
+//	go run ./cmd/sizes <themeIdx> <glyphset 0=half 1=quad 2=sextant> <rows> <blink 0|1>
 package main
 
 import (
@@ -40,7 +40,11 @@ func main() {
 	t := themes.All[ti%len(themes.All)].Theme
 	cols := puffin.ColsFor(rows)
 
-	grid := puffin.CellsAt(t, gs, cols, rows)
+	var pose puffin.Pose
+	if argi(3, 0) == 1 {
+		pose = puffin.Pose{puffin.Blink}
+	}
+	grid := puffin.CellsPosed(t, gs, cols, rows, pose)
 	cw, ch := gs.Dims()
 	fmt.Printf("# %d %d %d %d\n", cols, rows, cw, ch)
 	for y, row := range grid {

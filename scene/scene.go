@@ -45,6 +45,7 @@ type Opts struct {
 	SpriteX, SpriteY int // WORLD coordinates
 	Win              Window
 	Cutout           bool
+	Pose             puffin.Pose
 
 	W, H int // screen size
 }
@@ -68,7 +69,7 @@ func Build(o Opts) *canvas.Canvas {
 	backdrop(win, o.Backdrop, t, field)
 
 	cols := puffin.ColsFor(o.Rows)
-	win.Blit(puffin.CellsAt(t, o.Glyphs, cols, o.Rows),
+	win.Blit(puffin.CellsPosed(t, o.Glyphs, cols, o.Rows, o.Pose),
 		o.SpriteX-o.Win.WorldX, o.SpriteY-o.Win.WorldY)
 
 	screen.BlitCanvas(win, o.Win.ScreenX, o.Win.ScreenY)

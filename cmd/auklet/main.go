@@ -2,6 +2,7 @@
 // cutout transparency, and a window to move it around in and out of.
 //
 //	f                 cycle focus: auklet / window / view
+//	a                 animation on/off             e             blink now
 //	arrows, hjkl      move whatever has focus      shift+arrows  by 5
 //	+ / -             sprite size                  g             glyph set
 //	[ ] { }           window width / height
@@ -16,8 +17,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -61,9 +64,22 @@ type model struct {
 	w, h     int
 	ready    bool
 	quitting bool
+
+	animate  bool
+	blinking bool
+	frame    int
+	next     int
 }
 
-func (m model) Init() tea.Cmd { return nil }
+type tickMsg struct{}
+
+// 100ms is slow enough to cost nothing and fast enough that a two-frame blink
+// looks like a blink rather than a glitch.
+func tick() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+func (m model) Init() tea.Cmd { return tick() }
 
 func (m *model) reset() {
 	screenH := m.h - hudRows
@@ -89,6 +105,18 @@ func (m *model) clampWindow() {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		m.frame++
+		if m.animate {
+			switch {
+			case m.blinking && m.frame >= m.next+2:
+				m.blinking = false
+				m.next = m.frame + 25 + rand.Intn(35)
+			case !m.blinking && m.frame >= m.next:
+				m.blinking = true
+			}
+		}
+		return m, tick()
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		if !m.ready {
@@ -140,6 +168,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cutout = !m.cutout
 		case "b":
 			m.backdrop = (m.backdrop + 1) % len(scene.BackdropNames)
+		case "a":
+			m.animate = !m.animate
+			m.next = m.frame + 5
+		case "e":
+			m.blinking = !m.blinking
 		case "v":
 			m.showVal = !m.showVal
 		case "r":
@@ -170,7 +203,15 @@ func (m model) opts() scene.Opts {
 		Glyphs: m.glyphs, Rows: m.rows,
 		SpriteX: m.sx, SpriteY: m.sy, Win: m.win,
 		Cutout: m.cutout, W: m.w, H: m.h - hudRows,
+		Pose: m.pose(),
 	}
+}
+
+func (m model) pose() puffin.Pose {
+	if m.blinking {
+		return puffin.Pose{puffin.Blink}
+	}
+	return nil
 }
 
 func (m model) View() string {
@@ -206,7 +247,7 @@ func (m model) View() string {
 		m.sx, m.sy, faint.Render(where),
 		m.win.WorldX, m.win.WorldY, m.win.W, m.win.H)
 
-	help := faint.Render("f focus  arrows move  +/- size  g glyphs  [ ] { } window  tab theme  b backdrop  c cutout  r reset  q quit")
+	help := faint.Render("f focus  arrows move  +/- size  g glyphs  [ ] { } window  tab theme  b backdrop  c cutout  a animate  r reset  q quit")
 	if m.showVal && err != nil {
 		help = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).
 			Render(strings.ReplaceAll(err.Error(), "\n", "  |  "))
@@ -228,6 +269,7 @@ func clamp(v, lo, hi int) int {
 func main() {
 	p := tea.NewProgram(model{
 		glyphs: puffin.Quadrant, cutout: true, backdrop: 2, showVal: true,
+		animate: true, next: 20,
 	}, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

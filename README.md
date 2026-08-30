@@ -21,6 +21,8 @@ that happened.
 | key | does |
 |---|---|
 | `f` | cycle focus: auklet, window, view |
+| `a` | animation on/off |
+| `e` | blink now |
 | arrows, `hjkl` | move whatever has focus |
 | shift + arrows | move it by 5 |
 | `+` / `-` | sprite size |
@@ -172,6 +174,44 @@ first thing to reach for if a feature disappears too early.
 
 It stays legible down to about eight rows on sextants. Below that it is a dark
 bird with an orange wedge, which is still more puffin than most things.
+
+## Posing
+
+The base art is one flat grid: every pixel belongs to exactly one part and
+nothing is drawn behind anything else. That is enough to *recolour* a part --
+the role codes already segment the bird -- but not to *move* one, because the
+pixels a part would uncover were never drawn.
+
+So the mechanism is overlays, not bones. An `Overlay` is a small patch of role
+codes stamped over the base at a fixed offset; a `Pose` is the set currently
+applied. `Blink` is the one that ships.
+
+    puffin.CellsPosed(t, puffin.Quadrant, cols, rows, puffin.Pose{puffin.Blink})
+
+Stamping happens in **role space**, before resampling and before any colour is
+chosen, so a posed bird goes through exactly the same sampling and theming as a
+still one. A pose cannot quietly break either, and it cannot leak into the base
+-- a bird that never opened its eye again would be a memorable bug.
+
+This covers what a mascot in a status bar actually does: blink, open its beak,
+look startled. It does not cover moving the beak, and the blocker there is art,
+not code: slide the beak two cells left and you get a hole in the head, because
+the head under it was never drawn. Real articulation means layers with their own
+grids and z-order, and someone filling in roughly 150 pixels of occluded head
+first.
+
+### A note on dithering
+
+It was tried, at the resample stage, ordered 4x4. It is worse -- every edge grows
+a comb, the feet sprout spurious toes, the head grows a ragged crest. Dithering
+trades spatial resolution for colour resolution, and at eight rows there is no
+spatial resolution left to trade. It also fights the salience weighting directly:
+the weights exist to stop small features being averaged away, and dithering
+averages them away.
+
+Where it *would* earn its place is palette degradation. There is no orange in the
+16-colour palette, and alternating red and yellow subcells genuinely approximates
+one. That is a real gap and a different problem.
 
 ## Constraints worth knowing before you change something
 
