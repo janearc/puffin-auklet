@@ -5,9 +5,15 @@
 //
 // # Getting the module
 //
-// github.com/janearc/puffin-auklet is a PRIVATE repository, so "go get" has to
-// authenticate. That works, but while both trees sit on the same disk the
-// simpler thing is a replace directive in puffin's go.mod:
+// github.com/janearc/puffin-auklet is a private repository. Credentials are not
+// the problem -- it is the same account -- but the module proxy and the
+// checksum database cannot see it, so a plain "go get" fails on a fetch rather
+// than on a login:
+//
+//	GOPRIVATE=github.com/janearc/*
+//
+// Simpler again, while both trees sit on the same disk: a replace directive in
+// puffin's go.mod, which skips the proxy entirely.
 //
 //	require github.com/janearc/puffin-auklet v0.0.0
 //
