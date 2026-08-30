@@ -70,3 +70,20 @@ func (p Pose) applyTo(base []string) []string {
 	}
 	return out
 }
+
+// frontBlink closes both eyes. two patches, not one: the eyes are far apart and
+// a single overlay spanning them would repaint the beak between.
+var frontBlink = Pose{
+	{Name: "blink-l", OX: 3, OY: 9, Art: []string{
+		"WWWWW",
+		"WWWWW",
+		"DDDDD",
+		"WWWWW",
+	}},
+	{Name: "blink-r", OX: 16, OY: 9, Art: []string{
+		"WWWWW",
+		"WWWWW",
+		"DDDDD",
+		"WWWWW",
+	}},
+}

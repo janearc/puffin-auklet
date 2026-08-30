@@ -102,54 +102,6 @@ func (t Theme) colorFor(c byte) lipgloss.TerminalColor {
 	}
 }
 
-// '.' is transparent and takes the theme's Background.
-var sideArt = []string{
-	"....................KKKKKK.............",
-	".................KKKKKKKKKKKK..........",
-	"................KKKKKKKKKKKKKK.........",
-	"...............KKKKKKKKKKKKKKKK........",
-	".............BBBKKKKKKKKKKKKKKKK.......",
-	"...........BBBBBWWWWWWWWWKKKKKKKK......",
-	"..........YBBBBBWWWWWWWWWWKKKKKKK......",
-	"........RYYBBBBBBWDDDDWWWWWKKKKKKK.....",
-	".......RRYYBBBBBBWXEEXWWWWWKKKKKKK.....",
-	"......RRRYYBBBBBBWEEEEWWWWWWKKKKKK.....",
-	".....RRRRYYBBBBBBWXEEXWDDDWWKKKKKK.....",
-	"....RRRRRYYBBBBBBWWXXWWWWWDDKKKKKK.....",
-	"...RRRRRRRYYBBBBBWWWWWWWWWWWKKKKKK.....",
-	"..RRRRRRRRYYBBBBBWWWWWWWWWWWKKKKKK.....",
-	"..RRRRRRRRYYBBBBBWWWWWWWWWWKKKKKKK.....",
-	".RRRRRRRRRYYBBBBBWWWWWWWWWWKKKKKK......",
-	".RRRRRRRRRYYBBBBBWWWWWWWWWKKKKKKK......",
-	"RRRRRRRRRRYYBBBBWWWWWWWWWKKKKKKKK......",
-	".YRRRRRRRRRYYBBBWWWWWWWWKKKKKKKKKK.....",
-	"..YYRRRRRRRYYBBBKKKWKKKKKKKKKKKVVVVK...",
-	"....YYRRRRRYYBBYKKKKKKKKKKKKKKVVVVVVK..",
-	"......YYYRRYYBBKKKKKKKKKKKKKKKVVVVVVK..",
-	".........YYYYBBKKKKKKKKKKKKKKVVVVVVVVK.",
-	"...........KYYYKKKKKKKKKKKKKKVVVVVVVVKK",
-	"...........KKKKKKKKKKKKKKKKKKVVVVVVVVKK",
-	"...........KKWWWWWWWWWWWWWWWWWWWVVVVVKK",
-	"...........KWWWWWWWWWWWWWWWWWWWWWVVVVKK",
-	"...........KWWWWWWWWWWWWWWWWWWWWWVVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVVKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVKKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVVKKK",
-	"...........WWWWWWWWWWWWWWWWWWWWWWWVKKKK",
-	"............WWWWWWWWWWWWWWWWWWWWWWKKKK.",
-	".............WWWWWWWWWWWWWWWWWWWWKKKK..",
-	".............WWWWWWWWWWWWWWWWWWWWKKKK..",
-	"..............WWWWWWWWWWWWWWWWWWKKKK...",
-	"................WWWWWWWWWWWWWWWKKK.....",
-	".................WWWOOWWWWWWWOOKK......",
-	"...................WOOWWWWWWWOO........",
-	"....................OO.......OO........",
-	".................OOOOOOOOOOOOOOOOOO....",
-	"..................OOOOOOO..OOOOOOO.....",
-	".......................................",
-}
-
 // SizeAt reports the widget's footprint in cells at a given integer scale.
 func SizeAt(scale int) (w, h int) {
 	if scale < 1 {

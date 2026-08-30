@@ -132,7 +132,9 @@ into Go by hand.
 
     go run ./cmd/gen-themes ../../dodo/lib/themes/themes.css > themes/dodo_gen.go
 
-`themes/dodo_gen.go` is generated. Do not hand-edit it. The generator fails
+`themes/dodo_gen.go` is generated. Do not hand-edit it. Neither are
+`auklet/side_art.go` and `auklet/front_art.go` — those come from `cmd/gen-art`,
+which is also where you add a new sprite. The generator fails
 loudly if a variable the adapter needs has gone missing, rather than emitting a
 theme with holes in it.
 
@@ -333,6 +335,7 @@ of a rectangular halo, and it is the part to be careful with when editing
 | `themes/` | dodo's four plus three diagnostic themes |
 | `scene/` | backdrop and placement, shared by the viewer and the renderers |
 | `cmd/bandersnatch` | the workbench |
+| `cmd/gen-art` | draws the sprites; see its README for adding one |
 | `cmd/gen-themes` | stylesheet to Go |
 | `cmd/shot` | renders one composed screen to stdout, no TTY needed |
 | `cmd/dump` | one line per cell, for checking a render without parsing escapes |
