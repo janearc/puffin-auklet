@@ -27,7 +27,7 @@ import (
 // the backdrops exist to make transparency falsifiable. a cutout over a flat
 // field is indistinguishable from an opaque sprite whose background happens to
 // match; over text or bands it is obvious immediately.
-var BackdropNames = []string{"flat", "grid", "text", "bands"}
+var BackdropNames = []string{"flat", "grid", "text", "bands", "lights", "fireplace"}
 
 // Window is a rectangle of world space, shown somewhere on screen.
 type Window struct {
@@ -49,6 +49,10 @@ type Opts struct {
 	Pose             auklet.Pose
 
 	W, H int // screen size
+
+	// Frame advances any backdrop that animates -- "lights" -- one step per
+	// call. Static backdrops ignore it, so leaving it at zero costs nothing.
+	Frame int
 }
 
 const filler = "dodo whoops auklet corvid vaporwave bladerunner stardew "
@@ -67,7 +71,7 @@ func Build(o Opts) *canvas.Canvas {
 	desktop(screen, o.Theme.Theme)
 
 	win := canvas.New(o.Win.W, o.Win.H)
-	backdrop(win, o.Backdrop, t, field)
+	backdrop(win, o.Backdrop, t, field, o.Frame)
 
 	sp := o.sprite()
 	win.Blit(sp.CellsAt(t, o.Glyphs, sp.ColsFor(o.Rows), o.Rows, o.Pose),
@@ -95,7 +99,7 @@ func desktop(c *canvas.Canvas, t auklet.Theme) {
 	}
 }
 
-func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.TerminalColor) {
+func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.TerminalColor, frame int) {
 	w, h := c.Size()
 	c.Fill(canvas.Cell{R: ' ', BG: field})
 
@@ -116,6 +120,56 @@ func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.Termin
 		band := []lipgloss.TerminalColor{t.Wing, t.BeakBase, t.Stripe, field}
 		for y := 0; y < h; y++ {
 			c.FillRow(y, canvas.Cell{R: ' ', BG: band[(y/2)%len(band)]})
+		}
+	case "lights":
+		// a field of bulbs, one every 5 cells, offset a row at a time so
+		// they scatter rather than lining up into a single strand. each
+		// bulb is a different accent already in the theme (no new colour
+		// invented for this), and each has its own phase against frame so
+		// the field twinkles instead of blinking in unison.
+		bulbs := []lipgloss.TerminalColor{t.BeakTip, t.BeakBand, t.Wing, t.EyeRing, t.Feet}
+		const spacing = 5
+		for y := 0; y < h; y++ {
+			for x := y % spacing; x < w; x += spacing {
+				phase := (x*3 + y*7) % 13
+				col := bulbs[(x+y)%len(bulbs)]
+				if (frame+phase)%13 < 10 {
+					c.Set(x, y, canvas.Cell{R: '•', FG: col, BG: field})
+				} else {
+					c.Set(x, y, canvas.Cell{R: '·', FG: t.Stripe, BG: field})
+				}
+			}
+		}
+	case "fireplace":
+		// embers along the bottom row, flame licking a few rows above --
+		// each column its own height and phase, cooling from Wing (the
+		// hottest, nearest the coals) up through BeakTip and BeakBand to
+		// Stripe as it rises, so no new colour is invented for this either.
+		// the varying column HEIGHT is what reads as fire; a flat field of
+		// red would just read as a red field.
+		ramp := []lipgloss.TerminalColor{t.Wing, t.BeakTip, t.BeakBand, t.Stripe}
+		for x := 0; x < w; x++ {
+			noise := (x*13 + (x%7)*5 + frame*3) % 17
+			flameH := 2 + noise%5 // 2..6 rows of flame above the coals
+			for dist := 0; dist <= flameH && dist < h; dist++ {
+				y := h - 1 - dist
+				level := dist * len(ramp) / (flameH + 1)
+				if level >= len(ramp) {
+					level = len(ramp) - 1
+				}
+				r := '▓'
+				switch {
+				case dist == flameH:
+					r = '·'
+				case dist == flameH-1:
+					r = '▒'
+				case dist >= flameH-3:
+					r = '▓'
+				default:
+					r = '█'
+				}
+				c.Set(x, y, canvas.Cell{R: r, FG: ramp[level], BG: field})
+			}
 		}
 	}
 }
