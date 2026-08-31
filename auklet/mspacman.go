@@ -129,11 +129,15 @@ var msPacmanMouth3 = Pose{{
 // cmd/gen-art (auklet/mspacman_spin_frames.go) rather than computed here --
 // rotating role pixels at runtime would mean resampling the grid every
 // frame, and a disc drawn 24 times once at build time is free by comparison.
-// Each frame is a complete repaint of the whole disc, not an addition to it:
-// the wedge-overlay rule ("an overlay can only ADD pixels") still holds, it
-// is just that this overlay's Art covers the disc's entire footprint, so it
-// fully replaces whatever the base art (or a previous frame) had there --
-// there is nothing left over to paint around. OX=OY=0 because
+// Each frame is Replace: true, not a plain overlay: the disc interior is
+// unconditionally repainted every frame so an ordinary overlay would have
+// been enough there, but the bow and shoes sit OUTSIDE the disc's circular
+// silhouette, where the base art only has them at their resting, θ=0
+// position -- a plain overlay's transparent gap wherever a rotated frame
+// doesn't currently have a bow would let that resting bow show through
+// underneath, a stale ghost at the wrong angle. Replace forces every '.' in
+// the frame to actually clear the destination instead of passing it
+// through, so each frame is genuinely standalone. OX=OY=0 because
 // msPacmanSpinFrames crops every frame to the exact window the base art
 // itself trims to; see that function for why they cannot be trimmed one at
 // a time.
@@ -141,7 +145,7 @@ func msPacmanSpin() Emote {
 	frames := make([]Frame, len(msPacmanSpinFrames))
 	for i, art := range msPacmanSpinFrames {
 		frames[i] = Frame{
-			Pose: Pose{{Name: "spin", Part: PartOther, OX: 0, OY: 0, Art: art}},
+			Pose: Pose{{Name: "spin", Part: PartOther, OX: 0, OY: 0, Art: art, Replace: true}},
 			Hold: 50 * time.Millisecond,
 		}
 	}
