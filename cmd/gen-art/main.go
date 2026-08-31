@@ -169,6 +169,7 @@ func main() {
 	}
 	jobs = append(jobs, gopherJobs()...)
 	jobs = append(jobs, lampJobs()...)
+	jobs = append(jobs, msPacmanJobs()...)
 	for _, j := range jobs {
 		rows, dx, dy := j.draw().trim()
 		if err := emit(j.path, j.varName, j.note, rows, dx, dy); err != nil {
