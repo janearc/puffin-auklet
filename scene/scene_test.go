@@ -159,3 +159,95 @@ func TestOutOfViewMarker(t *testing.T) {
 		}
 	}
 }
+
+// Backdrop is drawable on its own, into any canvas, by name.
+//
+// It was private and Build was the only way to reach it -- but Build composes
+// a workbench screen, desktop and window box included. A caller that wants a
+// strip of fire along the bottom of its own interface had to take the
+// picture frame with it.
+func TestBackdropDrawsIntoAnyCanvas(t *testing.T) {
+	th := themes.All[0].Theme
+	field := th.Background
+
+	// a wide, short strip -- the shape a caller wants along the bottom of a
+	// terminal, and nothing like the workbench's window
+	c := canvas.New(120, 6)
+	if !Backdrop(c, "fireplace", th, field, 0) {
+		t.Fatal("fireplace is not a known backdrop")
+	}
+	w, h := c.Size()
+	if w != 120 || h != 6 {
+		t.Fatalf("the canvas changed size: %dx%d", w, h)
+	}
+	// the fire is at the BOTTOM: embers on the last row, and the top row of
+	// a six-row strip is above the flames
+	ink := func(y int) int {
+		n := 0
+		for x := 0; x < w; x++ {
+			if cellAt(c, x, y).R != ' ' && cellAt(c, x, y).R != 0 {
+				n++
+			}
+		}
+		return n
+	}
+	if ink(h-1) == 0 {
+		t.Error("no embers on the bottom row")
+	}
+	if ink(h-1) < ink(0) {
+		t.Error("the fire is upside down: more ink at the top than at the coals")
+	}
+}
+
+// Every name in the roster draws something, and an unknown one draws a field
+// rather than failing: a wrong name should look like nothing, never like a
+// crash.
+func TestEveryBackdropNameIsDrawable(t *testing.T) {
+	th := themes.All[0].Theme
+	for _, name := range BackdropNames {
+		c := canvas.New(40, 10)
+		if !Backdrop(c, name, th, th.Background, 3) {
+			t.Errorf("%s is in BackdropNames and is not drawable", name)
+		}
+	}
+	c := canvas.New(40, 10)
+	if Backdrop(c, "no-such-backdrop", th, th.Background, 0) {
+		t.Error("an unknown name reported itself as known")
+	}
+	if w, h := c.Size(); w != 40 || h != 10 {
+		t.Fatalf("an unknown name damaged the canvas: %dx%d", w, h)
+	}
+}
+
+// The animated ones move with Frame, and the static ones do not -- which is
+// what lets a caller pass a frame counter unconditionally.
+func TestFrameMovesOnlyTheAnimatedBackdrops(t *testing.T) {
+	th := themes.All[0].Theme
+	render := func(name string, frame int) string {
+		c := canvas.New(60, 8)
+		Backdrop(c, name, th, th.Background, frame)
+		return c.String()
+	}
+	for _, name := range []string{"lights", "fireplace"} {
+		if render(name, 0) == render(name, 7) {
+			t.Errorf("%s did not move between frames", name)
+		}
+	}
+	for _, name := range []string{"flat", "grid", "text", "bands"} {
+		if render(name, 0) != render(name, 7) {
+			t.Errorf("%s moved, and it is not an animated backdrop", name)
+		}
+	}
+}
+
+// Build still draws the same screen it always did: the index path is a thin
+// wrapper now, and the workbench must not have noticed.
+func TestBuildStillComposesThroughTheIndex(t *testing.T) {
+	o := base()
+	for i := range BackdropNames {
+		o.Backdrop = i
+		if Build(o) == nil {
+			t.Fatalf("backdrop %d (%s) built nothing", i, BackdropNames[i])
+		}
+	}
+}
