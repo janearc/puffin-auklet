@@ -180,6 +180,17 @@ func sign(v int) int {
 // light or already eye, so an eye that would burst through the cap or the beak
 // is trimmed rather than spilling over it. On a small face a large factor
 // simply stops having an effect, which is the right failure.
+//
+// A face with no cheek at all -- Ms. Pac-Man's disc is one flat Dark role,
+// nothing drawn Light anywhere near the eye -- has nowhere to grow into.
+// Painting only the pixels already inside the resting socket is not a
+// smaller version of the effect, it is a wrong one: the ring/pupil split
+// gets recomputed against a radius the art never grew to match, and the
+// eye comes out scrambled rather than merely unchanged. So growth counts
+// only if some painted pixel actually landed on cheek; a socket that
+// cannot grow returns empty for that eye, same as a face with no eye at
+// all, and buildEmotes' own guard against an all-empty performance takes
+// it from there.
 func (s Sprite) WideEyes(factor float64) Pose {
 	if factor <= 1 {
 		return nil
@@ -227,14 +238,15 @@ func (s Sprite) WideEyes(factor float64) Pose {
 			}
 		}
 
-		painted := false
+		painted, grew := false, false
 		for y := y0; y <= y1; y++ {
 			for x := x0; x <= x1; x++ {
 				if !within(x, y, 1) {
 					continue
 				}
+				onCheek := base[y][x] == RoleLight
 				// never over the cap or the beak: cheek, or the resting eye
-				if base[y][x] != RoleLight && !e.socket[[2]int{x, y}] {
+				if !onCheek && !e.socket[[2]int{x, y}] {
 					continue
 				}
 				role := byte(RolePupil)
@@ -243,9 +255,12 @@ func (s Sprite) WideEyes(factor float64) Pose {
 				}
 				buf[y-y0][x-x0] = role
 				painted = true
+				if onCheek {
+					grew = true
+				}
 			}
 		}
-		if !painted {
+		if !painted || !grew {
 			continue
 		}
 

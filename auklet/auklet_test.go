@@ -436,6 +436,29 @@ func TestEyelessSpriteDoesNotAdvertiseEyeEmotes(t *testing.T) {
 	}
 }
 
+// A sprite with an eye but no cheek around it -- Ms. Pac-Man's disc is flat
+// Dark with no Light pixels anywhere near the eye -- has nowhere for the eye
+// to grow into. WideEyes must come back empty rather than fall back to
+// repainting the resting socket: a scrambled eye is worse than no reaction,
+// the same principle TestEyelessSpriteDoesNotAdvertiseEyeEmotes holds for a
+// sprite with no eye at all.
+func TestCheeklessSpriteWideEyesIsInert(t *testing.T) {
+	s, err := NewSprite("disc", []string{"KKKKK", "KKEKK", "KKKKK"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := s.WideEyes(1.6); p != nil {
+		t.Errorf("wide eyes painted %d overlay(s) with no cheek to grow into", len(p))
+	}
+	// "surprised" is pure WideEyes and must not be advertised; "startled"
+	// also touches blink and Gaze, so it can still be legitimately offered
+	// with the widen beat silently dropped -- see mspacman.go for the real
+	// case this covers.
+	if _, ok := s.Emote("surprised"); ok {
+		t.Error(`a cheekless sprite advertises "surprised", which it cannot perform`)
+	}
+}
+
 func TestTransformEmotes(t *testing.T) {
 	s := FrontView
 
