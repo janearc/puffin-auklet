@@ -519,6 +519,7 @@ func (m model) baseOpts() scene.Opts {
 		Glyphs: m.glyphs, Sprite: m.sprite(), Rows: rows,
 		SpriteX: m.sx + tr.DX, SpriteY: m.sy + tr.DY, Win: m.win,
 		Cutout: m.cutout, W: m.w, H: m.h - hudRows,
+		Frame: m.frame,
 	}
 }
 

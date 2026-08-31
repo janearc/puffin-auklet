@@ -121,6 +121,7 @@ func main() {
 			o := base
 			place(&o, auklet.ScaleRows(*rows, fr.Transform.Factor()), fr.Transform.DX, fr.Transform.DY)
 			o.Pose = fr.Pose
+			o.Frame = int(t / step)
 			fmt.Print("\x1b[H\x1b[2J")
 			fmt.Println(scene.Build(o).String())
 			time.Sleep(step)
