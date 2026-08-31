@@ -16,5 +16,6 @@ func Characters() []CharacterSet {
 		{Name: "auklet", Views: Views()},
 		{Name: "gopher", Views: GopherViews()},
 		{Name: "lamp", Views: LampViews()},
+		{Name: "mspacman", Views: MsPacmanViews()},
 	}
 }
