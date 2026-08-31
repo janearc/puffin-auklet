@@ -24,6 +24,15 @@ type Overlay struct {
 	Part   Part
 	OX, OY int      // top-left of the patch, in source pixels
 	Art    []string // role codes; '.' means transparent, keep what is beneath
+
+	// Replace marks this overlay as a full redraw of its own footprint, not
+	// an addition to it: '.' cells inside it clear the destination to
+	// RoleNone instead of leaving whatever the base had there. Everything
+	// else still can only add, per the package doc -- this exists for
+	// Ms. Pac-Man's spin, where each frame is a complete alternate drawing
+	// and a gap where this frame has no bow must not let the base art's
+	// own bow, still sitting at its resting position, show through.
+	Replace bool
 }
 
 // Pose is a set of overlays applied in order. the zero Pose is the bird at rest.
@@ -62,7 +71,13 @@ func (p Pose) applyTo(base []string) []string {
 			}
 			for dx := 0; dx < len(row); dx++ {
 				x := o.OX + dx
-				if x < 0 || x >= len(buf[y]) || row[dx] == '.' {
+				if x < 0 || x >= len(buf[y]) {
+					continue
+				}
+				if row[dx] == '.' {
+					if o.Replace {
+						buf[y][x] = '.'
+					}
 					continue
 				}
 				buf[y][x] = row[dx]
