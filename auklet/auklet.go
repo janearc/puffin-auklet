@@ -97,6 +97,23 @@ func (t Theme) colorFor(c byte) lipgloss.TerminalColor {
 		return t.EyeRing
 	case 'D':
 		return t.Stripe
+	case '_':
+		// A HOLE. Not a colour -- the field, whatever the field is.
+		//
+		// Ms Pac-Man's open mouth was 'E', the pupil, and the theme said so:
+		// "the eye, and the open mouth's interior". On a cabinet that is
+		// right, because the cabinet is black and a black mouth and an
+		// absent one are the same picture. Off a cabinet they stop being
+		// the same picture: puffin nils Background for the cutout, so a
+		// mouth drawn in pupil-black is a black wedge stuck to a yellow
+		// disc on a purple page.
+		//
+		// '_' resolves to Background like '.' does, so it is cabinet-black
+		// in bandersnatch and transparent in a cutout -- the arcade reading
+		// and the correct one, without choosing between them. It is NOT
+		// '.', because '.' means "leave what is beneath" when an overlay
+		// composites, and the thing beneath the mouth is the disc.
+		return t.Background
 	default:
 		return t.Background
 	}

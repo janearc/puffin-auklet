@@ -16,6 +16,9 @@ import (
 // the cap, the face, the banded beak, the feet -- applied to sampling.
 var roleWeight = map[byte]float64{
 	'E': 7, // pupil
+	'_': 7, // a hole: as load-bearing as the pupil, and for the same reason --
+	//        an open mouth that loses its edge cells to the disc around it
+	//        closes by half a pixel at every size that matters
 	'X': 6, // orbital ring
 	'Y': 5, // the ridge stripe: one pixel wide in places, and load-bearing
 	'O': 3, // feet
