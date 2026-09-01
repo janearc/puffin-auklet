@@ -99,11 +99,42 @@ func desktop(c *canvas.Canvas, t auklet.Theme) {
 	}
 }
 
+// backdrop draws the one at an index, which is what Opts carries and what
+// the workbench cycles with a key.
 func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.TerminalColor, frame int) {
+	Backdrop(c, BackdropNames[which%len(BackdropNames)], t, field, frame)
+}
+
+// Backdrop draws one backdrop, BY NAME, into any canvas -- and it is the
+// whole of what a caller outside this package needs.
+//
+// It was private, and Build was the only way to reach it. But Build composes
+// a workbench screen: a stippled desktop around the window and a box drawn
+// on its border. A caller that wants a strip of fire along the bottom of its
+// own interface -- puffin does -- had to take the picture frame with it.
+//
+// By name rather than by index because an index is a contract nobody can
+// read: "5" means fireplace right up until a sixth backdrop is inserted
+// above it. Opts keeps the index, since the workbench cycles through them
+// with a key and an index is the right shape for that.
+//
+// It reports whether the name was known, so a caller can fall back rather
+// than paint an empty field and wonder. An unknown name still leaves the
+// canvas filled with the field colour: a wrong name should look like
+// nothing, never like a failure to draw.
+func Backdrop(c *canvas.Canvas, name string, t auklet.Theme, field lipgloss.TerminalColor, frame int) bool {
 	w, h := c.Size()
 	c.Fill(canvas.Cell{R: ' ', BG: field})
 
-	switch BackdropNames[which%len(BackdropNames)] {
+	known := false
+	for _, n := range BackdropNames {
+		if n == name {
+			known = true
+			break
+		}
+	}
+
+	switch name {
 	case "grid":
 		for y := 0; y < h; y += 2 {
 			for x := 0; x < w; x += 4 {
@@ -172,6 +203,7 @@ func backdrop(c *canvas.Canvas, which int, t auklet.Theme, field lipgloss.Termin
 			}
 		}
 	}
+	return known
 }
 
 func (o Opts) sprite() auklet.Sprite {
