@@ -34,6 +34,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/janearc/puffin-auklet/auklet"
+	"github.com/janearc/puffin-auklet/buildinfo"
 	"github.com/janearc/puffin-auklet/canvas"
 	"github.com/janearc/puffin-auklet/scene"
 	"github.com/janearc/puffin-auklet/themes"
@@ -656,7 +657,15 @@ func showRoster(w io.Writer) {
 func main() {
 	character := flag.String("character", "auklet", "start on this one")
 	roster := flag.Bool("roster", false, "list the character roster; `-roster show` renders a preview of each")
+	age := flag.Bool("age", false, "say what this binary is and when it was built, then exit")
 	flag.Parse()
+
+	// --age before anything else opens a terminal. The question "is this thing
+	// abandoned" has to be answerable without launching the thing.
+	if *age {
+		fmt.Print(buildinfo.Read().Age())
+		return
+	}
 
 	if *roster {
 		if flag.Arg(0) == "show" {

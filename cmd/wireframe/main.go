@@ -19,6 +19,7 @@
 //	wireframe -layout roster.json -frame 7         # a later phase of the twinkle
 //	wireframe -layout roster.json -animate         # run it; ctrl-c to stop
 //	wireframe -layout roster.json -list            # what the file contains
+//	wireframe --age                                # what this binary is
 //
 // A fill is a BACKDROP name or a CHARACTER name. Backdrops fill the region;
 // characters stand in it, scaled to fit and centred, with their transparent
@@ -43,6 +44,7 @@ import (
 	"time"
 
 	"github.com/janearc/puffin-auklet/auklet"
+	"github.com/janearc/puffin-auklet/buildinfo"
 	"github.com/janearc/puffin-auklet/canvas"
 	"github.com/janearc/puffin-auklet/scene"
 	"github.com/janearc/puffin-auklet/themes"
@@ -99,9 +101,17 @@ func main() {
 	list := flag.Bool("list", false, "describe the layout and exit")
 	animate := flag.Bool("animate", false, "redraw continuously; ctrl-c to stop")
 	fps := flag.Int("fps", 8, "frames a second with -animate")
+	age := flag.Bool("age", false, "say what this binary is and when it was built, then exit")
 	fill := fills{}
 	flag.Var(fill, "fill", "region=backdrop, repeatable")
 	flag.Parse()
+
+	// answered before -layout is required, so the question can be asked of a
+	// binary you have not decided how to use yet
+	if *age {
+		fmt.Print(buildinfo.Read().Age())
+		return
+	}
 
 	if *path == "" {
 		fmt.Fprintln(os.Stderr, "wireframe: -layout is required")
