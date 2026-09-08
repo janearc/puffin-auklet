@@ -1,0 +1,13 @@
+# auklet role alphabet, version 1
+# char	name -- the authority is Roles() and RoleName()
+.	transparent
+K	dark
+W	light
+V	wing
+D	stripe
+B	beak base
+Y	beak band
+R	beak tip
+O	feet
+E	pupil
+X	eye ring
