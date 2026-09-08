@@ -20,6 +20,7 @@
 //	wireframe -layout roster.json -animate         # run it; ctrl-c to stop
 //	wireframe -layout roster.json -list            # what the file contains
 //	wireframe --age                                # what this binary is
+//	wireframe -layout roster.json -svg scene.svg   # a picture, for anywhere
 //
 // A fill is a BACKDROP name or a CHARACTER name. Backdrops fill the region;
 // characters stand in it, scaled to fit and centred, with their transparent
@@ -42,6 +43,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/buildinfo"
@@ -102,6 +106,7 @@ func main() {
 	animate := flag.Bool("animate", false, "redraw continuously; ctrl-c to stop")
 	fps := flag.Int("fps", 8, "frames a second with -animate")
 	age := flag.Bool("age", false, "say what this binary is and when it was built, then exit")
+	svg := flag.String("svg", "", "write the scene to an SVG `file` instead of the terminal")
 	fill := fills{}
 	flag.Var(fill, "fill", "region=backdrop, repeatable")
 	flag.Parse()
@@ -128,6 +133,25 @@ func main() {
 		return
 	}
 	t, used := pickTheme(l.Theme, *theme)
+	// an SVG is the shareable form: it needs no terminal, no font with block
+	// glyphs, and nothing installed to look at it
+	if *svg != "" {
+		// lipgloss degrades to no colour when stdout is not a terminal, and a
+		// degraded colour resolves to black -- which is correct for a pipe and
+		// useless for a picture. An SVG has no terminal to detect, so the
+		// profile is forced, the way cmd/shot does for the same reason.
+		lipgloss.SetColorProfile(termenv.TrueColor)
+		c, warns := build(l, fill, t, *frame)
+		if err := os.WriteFile(*svg, []byte(SVG(c, hexOr(t.Background, "#12121a"))), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, "wireframe:", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "%s  %dx%d  theme %s  frame %d  -> %s\n", l.Name, l.Cols, l.Rows, used, *frame, *svg)
+		for _, w := range warns {
+			fmt.Fprintln(os.Stderr, "  "+w)
+		}
+		return
+	}
 	if *animate {
 		run(l, fill, t, *frame, *fps, used)
 		return
@@ -178,6 +202,13 @@ func pickTheme(want, override string) (auklet.Theme, string) {
 // render draws every region that has a fill, and reports what it could not do
 // rather than dropping it.
 func render(l *Layout, fill fills, t auklet.Theme, frame int) (string, []string) {
+	c, warns := build(l, fill, t, frame)
+	return c.String() + "\n", warns
+}
+
+// build composes the scene and hands back the canvas, so a caller that wants
+// pixels rather than escape codes has something to walk.
+func build(l *Layout, fill fills, t auklet.Theme, frame int) (*canvas.Canvas, []string) {
 	var warns []string
 	root := canvas.New(l.Cols, l.Rows)
 
@@ -228,7 +259,7 @@ func render(l *Layout, fill fills, t auklet.Theme, frame int) (string, []string)
 			warns = append(warns, fmt.Sprintf("region %q has a mask daffy did not export; drawn as its box", r.Name))
 		}
 	}
-	return root.String() + "\n", warns
+	return root, warns
 }
 
 // fillFor is the backdrop a region should get: the flag first, then the
