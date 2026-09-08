@@ -62,11 +62,45 @@ import (
 // Unknown fields are ignored, which is what lets daffy add to it without
 // breaking this.
 type Layout struct {
+	// Daffy is the export's own format version, daffy's LayoutVersion. It is
+	// absent from anything exported before daffy versioned this payload, and
+	// zero is that absence rather than a version.
+	Daffy   int      `json:"daffy"`
 	Name    string   `json:"name"`
 	Cols    int      `json:"cols"`
 	Rows    int      `json:"rows"`
 	Theme   string   `json:"theme"`
 	Regions []Region `json:"regions"`
+}
+
+// LayoutVersion is the export version this reader was written against.
+const LayoutVersion = 1
+
+// VersionNote says what is worth saying about the export's version, and
+// nothing when there is nothing to say.
+//
+// AN UNKNOWN VERSION WARNS AND RENDERS. It does not refuse. Daffy refuses a
+// document format it does not know, and is right to: that format has one
+// writer and one reader, both in daffy's own tree, so a refusal costs a
+// moment and nothing is misread. This is the other case. The export is an
+// interface between two trees with separate owners and separate release
+// cadences, and the fields read here -- name, cols, rows, theme, regions --
+// are the ones that existed at version 1. A bump that adds a field would,
+// under a refusal, break this harness on every daffy release until someone
+// shipped a matching one, for a change that did not affect it.
+//
+// So the risk is carried where a person can see it: the picture is drawn,
+// and the warning says what might be wrong with it. That is only honest
+// because a wireframe is looked at immediately by the person who asked for
+// it. A reader whose output nobody eyeballs should refuse instead.
+func (l *Layout) VersionNote() string {
+	switch {
+	case l.Daffy == 0:
+		return fmt.Sprintf("this export carries no version; it predates daffy's LayoutVersion (this reads %d)", LayoutVersion)
+	case l.Daffy > LayoutVersion:
+		return fmt.Sprintf("this export is version %d and this reads %d: the picture is drawn from the fields version %d had, and anything newer is ignored -- check it against daffy", l.Daffy, LayoutVersion, LayoutVersion)
+	}
+	return ""
 }
 
 // Region is one named area. Cells is [x0, y0, x1, y1] in daffy's order.
@@ -127,6 +161,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "wireframe:", err)
 		os.Exit(1)
+	}
+	// said before the picture, not after it, so it is read as a caveat on
+	// what follows rather than as a footnote to a picture already believed
+	if note := l.VersionNote(); note != "" {
+		fmt.Fprintln(os.Stderr, "wireframe:", note)
 	}
 	if *list {
 		describe(os.Stdout, l, fill)
@@ -224,13 +263,14 @@ func build(l *Layout, fill fills, t auklet.Theme, frame int) (*canvas.Canvas, []
 		}
 		// A region asking for a fill and one cell across is almost certainly a
 		// collapsed drag rather than an intention: no backdrop is legible in a
-		// single cell, and daffy today gives no way to see a stray one or to
-		// remove it except by hitting it, which at one cell is nearly
-		// impossible. Found in the wild -- wireframe-2.daffy carried a 1x1
-		// named "ground", kind "backdrop", where the name and kind said what
-		// was meant and the geometry said the drag had collapsed. Drawn
-		// anyway, because refusing to render what the file says is worse than
-		// saying it looks wrong.
+		// single cell, and a stray one is hard to see and harder to hit, which
+		// is the only way to remove it. Found in the wild in wireframe-2, as a
+		// 1x1 named "ground", kind "backdrop" -- the name and kind said what
+		// was meant and the geometry said the drag had collapsed. That file
+		// has since been redrawn and the region is full size, so the case is
+		// no longer reproducible from it; the warning stays because the way to
+		// make one has not changed. Drawn anyway, because refusing to render
+		// what the file says is worse than saying it looks wrong.
 		if w < 2 || h < 2 {
 			warns = append(warns, fmt.Sprintf(
 				"region %q is %dx%d and asks for %q; a fill that small is usually a collapsed drag",
