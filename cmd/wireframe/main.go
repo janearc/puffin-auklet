@@ -15,9 +15,15 @@
 // Usage:
 //
 //	wireframe -layout roster.json                  # fills from each region's notes
-//	wireframe -layout roster.json -fill outer=lights -fill side=fireplace
+//	wireframe -layout roster.json -fill outer=lights -fill berth=gopher
 //	wireframe -layout roster.json -frame 7         # a later phase of the twinkle
+//	wireframe -layout roster.json -animate         # run it; ctrl-c to stop
 //	wireframe -layout roster.json -list            # what the file contains
+//
+// A fill is a BACKDROP name or a CHARACTER name. Backdrops fill the region;
+// characters stand in it, scaled to fit and centred, with their transparent
+// parts showing whatever is underneath -- which is what a "berth" is for.
+// Backdrop names are tried first; today the two sets do not overlap.
 //
 // A region is filled if -fill names it, else if its notes carry `fill`. A
 // region with neither is left alone rather than guessed at, because an
@@ -30,8 +36,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/janearc/puffin-auklet/auklet"
 	"github.com/janearc/puffin-auklet/canvas"
@@ -88,6 +97,8 @@ func main() {
 	frame := flag.Int("frame", 0, "the animation frame to draw; backdrops phase on it")
 	theme := flag.String("theme", "", "auklet theme to draw with; the layout's own name is tried first")
 	list := flag.Bool("list", false, "describe the layout and exit")
+	animate := flag.Bool("animate", false, "redraw continuously; ctrl-c to stop")
+	fps := flag.Int("fps", 8, "frames a second with -animate")
 	fill := fills{}
 	flag.Var(fill, "fill", "region=backdrop, repeatable")
 	flag.Parse()
@@ -107,6 +118,10 @@ func main() {
 		return
 	}
 	t, used := pickTheme(l.Theme, *theme)
+	if *animate {
+		run(l, fill, t, *frame, *fps, used)
+		return
+	}
 	out, warns := render(l, fill, t, *frame)
 	fmt.Print(out)
 	// the theme actually used is named on stderr, because a layout asking for
@@ -180,13 +195,18 @@ func render(l *Layout, fill fills, t auklet.Theme, frame int) (string, []string)
 				"region %q is %dx%d and asks for %q; a fill that small is usually a collapsed drag",
 				r.Name, w, h, name))
 		}
-		// a child canvas the size of the region. The backdrop never learns
-		// where this sits, which is why the same function works as a
-		// full-screen field and as a 16x16 corner.
+		// a child canvas the size of the region. Neither a backdrop nor a
+		// character learns where this sits, which is why the same code works
+		// as a full-screen field and as a nineteen-cell berth.
 		child := canvas.New(w, h)
-		if !scene.Backdrop(child, name, t, nil, frame) {
-			warns = append(warns, fmt.Sprintf("region %q wants backdrop %q, which is not one of: %s",
-				r.Name, name, strings.Join(scene.BackdropNames, " ")))
+		switch {
+		case scene.Backdrop(child, name, t, nil, frame):
+			// filled
+		case stand(child, name, t):
+			// a character stands here
+		default:
+			warns = append(warns, fmt.Sprintf("region %q wants %q, which is neither a backdrop (%s) nor a character (%s)",
+				r.Name, name, strings.Join(scene.BackdropNames, " "), strings.Join(characterNames(), " ")))
 			continue
 		}
 		root.BlitCanvas(child, r.Cells[0], r.Cells[1])
@@ -230,4 +250,95 @@ func describe(w *os.File, l *Layout, fill fills) {
 			r.Name, r.Kind, r.Cells[0], r.Cells[1], cw, ch, f, shape)
 	}
 	fmt.Fprintln(w, "backdrops:", strings.Join(scene.BackdropNames, " "))
+}
+
+// stand puts a character in the canvas, scaled to fit and centred, and reports
+// whether it knew the name.
+//
+// The sprite carries no background of its own -- the theme's is cleared first,
+// the way scene.Build does for a cutout -- so its transparent cells show
+// whatever the region is sitting on. A gopher in a berth over a field of bulbs
+// should have bulbs behind it, not a rectangle of theme colour.
+//
+// The auklet scales ITSELF: RowsToFit picks the tallest that fits the region
+// and ColsFor derives the width from the art's own aspect. Nothing here
+// decides how big a character should be, which is the same division the
+// backdrops use -- the region says how much room there is and the thing in it
+// works out the rest.
+func stand(c *canvas.Canvas, name string, t auklet.Theme) bool {
+	var views []auklet.Sprite
+	for _, ch := range auklet.Characters() {
+		if strings.EqualFold(ch.Name, name) {
+			views = ch.Views
+			break
+		}
+	}
+	if len(views) == 0 {
+		return false
+	}
+	sp := views[0]
+	w, h := c.Size()
+
+	t.Background = nil // see through the character, not around it
+	rows := sp.RowsToFit(w, h)
+	cols := sp.ColsFor(rows)
+	// centred, and never negative when the art is wider than the berth
+	c.Blit(sp.CellsAt(t, auklet.Quadrant, cols, rows, nil), max((w-cols)/2, 0), max((h-rows)/2, 0))
+	return true
+}
+
+// characterNames is the roster, for the message when a fill matches nothing.
+func characterNames() []string {
+	out := make([]string, 0, len(auklet.Characters()))
+	for _, ch := range auklet.Characters() {
+		out = append(out, ch.Name)
+	}
+	return out
+}
+
+// run redraws until interrupted.
+//
+// The alternate screen, so the scene has the terminal to itself and the shell
+// comes back untouched -- a loop that scrolls a scene up the scrollback is
+// unreadable and leaves a mess behind it. The cursor is hidden for the same
+// reason: it would sit in the middle of the picture, blinking.
+//
+// Restored on SIGINT rather than only on a clean return, because the way this
+// ends is ctrl-c and a tool that leaves a terminal without its cursor is a
+// tool people stop running.
+func run(l *Layout, fill fills, t auklet.Theme, start, fps int, theme string) {
+	if fps < 1 {
+		fps = 1
+	}
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
+	restore := func() { fmt.Print("\x1b[?25h\x1b[?1049l") }
+	fmt.Print("\x1b[?1049h\x1b[?25l")
+	defer restore()
+
+	// the warnings go out once, before the alternate screen swallows them,
+	// rather than every frame
+	if _, warns := render(l, fill, t, start); len(warns) > 0 {
+		restore()
+		for _, w := range warns {
+			fmt.Fprintln(os.Stderr, "  "+w)
+		}
+		fmt.Print("\x1b[?1049h\x1b[?25l")
+	}
+
+	tick := time.NewTicker(time.Second / time.Duration(fps))
+	defer tick.Stop()
+	for frame := start; ; frame++ {
+		out, _ := render(l, fill, t, frame)
+		// home rather than clear: repainting every cell every frame with no
+		// erase in between is what keeps it from flickering
+		fmt.Print("\x1b[H" + out)
+		fmt.Printf("%s  %dx%d  theme %s  frame %d  ctrl-c to stop", l.Name, l.Cols, l.Rows, theme, frame)
+		select {
+		case <-sig:
+			return
+		case <-tick.C:
+		}
+	}
 }
