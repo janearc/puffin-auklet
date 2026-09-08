@@ -166,6 +166,20 @@ func render(l *Layout, fill fills, t auklet.Theme, frame int) (string, []string)
 			warns = append(warns, fmt.Sprintf("region %q is %dx%d, nothing drawn", r.Name, w, h))
 			continue
 		}
+		// A region asking for a fill and one cell across is almost certainly a
+		// collapsed drag rather than an intention: no backdrop is legible in a
+		// single cell, and daffy today gives no way to see a stray one or to
+		// remove it except by hitting it, which at one cell is nearly
+		// impossible. Found in the wild -- wireframe-2.daffy carried a 1x1
+		// named "ground", kind "backdrop", where the name and kind said what
+		// was meant and the geometry said the drag had collapsed. Drawn
+		// anyway, because refusing to render what the file says is worse than
+		// saying it looks wrong.
+		if w < 2 || h < 2 {
+			warns = append(warns, fmt.Sprintf(
+				"region %q is %dx%d and asks for %q; a fill that small is usually a collapsed drag",
+				r.Name, w, h, name))
+		}
 		// a child canvas the size of the region. The backdrop never learns
 		// where this sits, which is why the same function works as a
 		// full-screen field and as a 16x16 corner.
