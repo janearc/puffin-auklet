@@ -559,11 +559,25 @@ func (m model) View() string {
 	bold := lipgloss.NewStyle().Bold(true)
 	faint := lipgloss.NewStyle().Faint(true)
 
-	hud := fmt.Sprintf("%s  %s %s  %s  %s %dx%d %s %s  %s%s",
+	// the backdrop is named, beside the other things b, g and c change.
+	//
+	// It was the one cycling setting the HUD did not report, so pressing b a
+	// few times left you looking at a field of twinkling bulbs with no way to
+	// find out it is called "lights" or how it was made. cmd/shot has printed
+	// it all along, which made the interactive tool the only place the answer
+	// was missing -- and the interactive tool is the one where you are
+	// pressing the key. Jane, looking at exactly that: "bandersnatch is not
+	// telling me the name of the background i'm looking at so i have no idea
+	// how they attained that."
+	//
+	// Bare, and next to the glyph set, because that is how shot prints it.
+	back := scene.BackdropNames[m.backdrop%len(scene.BackdropNames)]
+
+	hud := fmt.Sprintf("%s  %s %s  %s  %s %dx%d %s %s %s  %s%s",
 		bold.Render(auklet.Characters()[m.character].Name),
 		bold.Render(cur.Name), status,
 		bold.Render("["+m.focus.String()+"]"),
-		m.sprite().Name, m.sprite().ColsFor(m.rows), m.rows, m.glyphs, cut,
+		m.sprite().Name, m.sprite().ColsFor(m.rows), m.rows, m.glyphs, cut, back,
 		bold.Render(m.state()), faint.Render(where))
 
 	help := faint.Render("f focus  y view  n character  t narrate  m intro  p emote  i pose  s slide  o attention  +/- size  g glyphs  tab theme  b backdrop  c cutout  r reset  q quit")
